@@ -37,6 +37,8 @@ export const Fonts = Platform.select({
     mono: 'monospace',
   },
   web: {
+    // Make web share the same primary font family token as native.
+    // (RN ignores CSS font stacks; this matters mainly for web.)
     sans: 'system-ui, sans-serif',
     mono: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace',
   },

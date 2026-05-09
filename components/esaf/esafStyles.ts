@@ -62,7 +62,8 @@ export const esafStyles = StyleSheet.create({
   },
 
   esafBtnPrimary: {
-    backgroundColor: esafColors.brand.red,
+    backgroundColor: '#112A74',
+
     color: '#fff',
     fontSize: 13,
     fontWeight: '500',

@@ -114,7 +114,7 @@ export function CustomersDashboardScreen() {
                 ? primaryCustomer.accounts.map((a, idx) => (
                     <View key={idx} style={styles.row}>
                       <View style={styles.iconWrap}>
-                        <Ionicons name={a.icon as any} size={16} color="#2563EB" />
+                        <Ionicons name={a.icon as any} size={16} color="#112A74" />
                       </View>
                       <View style={styles.rowText}>
                         <Text style={styles.rowTitle}>{a.title}</Text>

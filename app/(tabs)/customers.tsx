@@ -13,6 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { globalStyles } from '@/theme/globalStyles';
+
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
@@ -209,11 +212,12 @@ export default function CustomersScreen() {
 
   return (
     <SafeAreaView
-      style={styles.safeArea}
+      style={globalStyles.safeArea}
       edges={['top', 'left', 'right']}>
+
       <StatusBar style="dark" />
 
-      <View style={styles.container}>
+      <View style={globalStyles.screenBase}>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
@@ -286,7 +290,7 @@ export default function CustomersScreen() {
                   <Ionicons
                     name="information-circle-outline"
                     size={18}
-                    color="#1D4ED8"
+                    color="#112A74"
                   />
 
                   <Text style={styles.testHeaderText}>
@@ -664,7 +668,8 @@ export default function CustomersScreen() {
   style={styles.primaryButton}
   onPress={() =>
     router.push({
-      pathname: '/casa/open/[step]',
+                  pathname: '/(casa)/open/[step]',
+
       params: {
         step: 'identify',
         type: 'Savings',

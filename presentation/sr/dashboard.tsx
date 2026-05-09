@@ -7,7 +7,7 @@ import type { SRItem, SRStatus } from '@/domain/sr/sr-item';
 const SR_STATUS_STYLES: Record<SRStatus, { backgroundColor: string; textColor: string; borderColor: string }> = {
   Open: {
     backgroundColor: '#E0ECFF',
-    textColor: '#2563EB',
+    textColor: '#112A74',
     borderColor: '#BFDBFE',
   },
   'In Progress': {

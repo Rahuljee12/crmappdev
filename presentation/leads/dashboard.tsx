@@ -19,16 +19,16 @@ const stageStyles: Record<
   { backgroundColor: string; textColor: string }
 > = {
   Hot: {
-    backgroundColor: '#FFE7EA',
-    textColor: '#E11D48',
+    backgroundColor: '#f7e4e7',
+    textColor: '#ca030d',
   },
   Warm: {
-    backgroundColor: '#FEF3C7',
-    textColor: '#B45309',
+    backgroundColor: '#f6eee0',
+    textColor: '#a36100',
   },
   Cold: {
-    backgroundColor: '#E0ECFF',
-    textColor: '#2563EB',
+    backgroundColor: '#e1e6f0',
+    textColor: '#112A74',
   },
 };
 
@@ -153,7 +153,7 @@ export function LeadsDashboardScreen() {
             </View>
 
             <Text style={styles.sourceText}>
-              via {lead.source}
+             {lead.source}
             </Text>
           </View>
 
@@ -250,15 +250,15 @@ scrollContent: {
   },
 
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '700',
     color: '#101828',
   },
 
   sortLabel: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#2563EB',
+    color: '#112A74',
   },
 
   leadCard: {
@@ -293,13 +293,13 @@ scrollContent: {
   },
 
   leadName: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
   },
 
   leadProduct: {
-    fontSize: 11,
+    fontSize: 14,
     color: '#667085',
     marginTop: 2,
   },
@@ -311,14 +311,14 @@ scrollContent: {
   },
 
   stageText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
 
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
+    marginTop: 24,
   },
 
   amountLeft: {
@@ -335,8 +335,8 @@ scrollContent: {
 
   sourceText: {
     marginLeft: 'auto',
-    fontSize: 10,
-    color: '#667085',
+    fontSize: 12,
+    color: '#434957',
   },
 
   footerRow: {
@@ -356,7 +356,7 @@ scrollContent: {
   },
 
   followUpText: {
-    fontSize: 11,
+    fontSize: 14,
     color: '#667085',
     fontWeight: '500',
   },
@@ -365,7 +365,7 @@ scrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#1D4ED8',
+    backgroundColor: '#112A74',
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 9,
@@ -373,7 +373,7 @@ scrollContent: {
 
   callButtonText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '600',
   },
 

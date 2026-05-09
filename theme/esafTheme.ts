@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 export const esafFonts = {
   sans: Platform.select({
     ios: 'Helvetica Neue',
-    default: 'sans-serif',
+    default: 'system-ui, sans-serif',
     web: 'system-ui, sans-serif',
   }) as string,
   mono: Platform.select({
