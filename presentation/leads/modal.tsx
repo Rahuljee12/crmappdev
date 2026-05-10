@@ -28,6 +28,10 @@ const INCOME_BANDS = ['Below 2L', '2-5L', '5-10L', '10-25L', '25L+'];
 const PRODUCT_TYPES = ['Savings', 'Current', 'Term Deposit', 'Recurring Deposit', 'Personal Loan', 'Mortgage Loan'];
 const DOCUMENT_TYPES = ['Aadhaar', 'PAN', 'Voter ID', 'Driving Licence', 'Passport'];
 const OTP_DIGITS = Array.from({ length: 6 }, (_, index) => index);
+const EXISTING_LEAD_PRODUCTS: Record<string, string[]> = {
+  '9876543210': ['Home Loan'],
+  '9123456780': ['CASA Premium', 'Business Loan'],
+};
 
 const SCREEN_SCALE = Math.min(Math.max(Dimensions.get('window').width / 390, 0.9), 1.08);
 const S = (value: number) => Math.round(value * SCREEN_SCALE);
@@ -146,6 +150,9 @@ export function NewLeadModalScreen() {
   const identityOtpValue = identityOtpDigits.join('');
 
   const otpSlotWidth = Math.max(34, Math.min(46, Math.floor((windowWidth - 100) / 6)));
+  const normalizedMobile = mobile.replace(/\D/g, '').slice(0, 10);
+  const existingLeadProducts = EXISTING_LEAD_PRODUCTS[normalizedMobile] ?? [];
+  const showExistingLeadBanner = step === 1 && existingLeadProducts.length > 0;
 
   const selectedProductCode =
     PRODUCT_CODES.find((item) => item.label === productCode) ?? PRODUCT_CODES[1];
@@ -334,6 +341,20 @@ export function NewLeadModalScreen() {
                       style={[styles.textField, styles.mobileField]}
                     />
                   </View>
+
+                  {showExistingLeadBanner ? (
+                    <View style={styles.existingLeadBanner}>
+                      <Text style={styles.existingLeadTitle}>Leads already exist</Text>
+                      <Text style={styles.existingLeadText}>Associated products:</Text>
+                      <View style={styles.existingLeadList}>
+                        {existingLeadProducts.map((product) => (
+                          <Text key={product} style={styles.existingLeadListItem}>
+                            {product}
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
 
                   <Text style={styles.fieldLabel}>Lead source</Text>
                   <View style={[styles.dropdownWrap, styles.dropdownWrapFull]}>
@@ -1087,6 +1108,36 @@ const styles = StyleSheet.create({
   mobileField: {
     flex: 1,
   },
+  existingLeadBanner: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#B7E4C7',
+    backgroundColor: '#EAF8EF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  existingLeadTitle: {
+    color: '#127A36',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  existingLeadText: {
+    color: '#14532D',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  existingLeadList: {
+    gap: 2,
+  },
+  existingLeadListItem: {
+    color: '#14532D',
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
   documentField: {
     flex: 1,
   },
@@ -1495,4 +1546,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-
