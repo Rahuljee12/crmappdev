@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -11,8 +11,9 @@ import {
   View,
 } from 'react-native';
 
-import { useLeads } from '@/app/lead-store';
-import type { Lead, LeadStatus } from '@/domain/leads/lead';
+import { useLeadsQuery } from '@/hooks/use-leads';
+import { useLeadsCriteria } from '@/hooks/use-leads-criteria';
+import type { LeadStatus } from '@/domain/leads/lead';
 
 const stageStyles: Record<
   LeadStatus,
@@ -34,7 +35,11 @@ const stageStyles: Record<
 
 export function LeadsDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const leads = useLeads();
+  const criteria = useLeadsCriteria();
+  const leadsQuery = useLeadsQuery();
+  const leads = leadsQuery.data;
+  const isLoading = criteria.isLoading || leadsQuery.isLoading;
+  const isError = criteria.isError || leadsQuery.isError;
 
   const summaryCards = useMemo(() => {
     const byStatus: Record<LeadStatus, number> = {
@@ -43,7 +48,7 @@ export function LeadsDashboardScreen() {
       Cold: 0,
     };
 
-    for (const lead of leads) {
+    for (const lead of leads ?? []) {
       byStatus[lead.status]++;
     }
 
@@ -63,48 +68,76 @@ export function LeadsDashboardScreen() {
   <View style={styles.container}>
 
     <FlatList
-      data={leads}
-      keyExtractor={(item) => item.name}
-      showsVerticalScrollIndicator={false}
-      removeClippedSubviews
-      initialNumToRender={6}
-      maxToRenderPerBatch={8}
-      windowSize={10}
-      contentContainerStyle={styles.scrollContent}
-      ListHeaderComponent={
-        <>
-          {/* Summary Cards */}
-          <View style={styles.summaryRow}>
-            {summaryCards.map((card) => (
-              <View
-                key={card.label}
-                style={[
-                  styles.summaryCard,
-                  { backgroundColor: card.background },
-                ]}>
-                <Text
-                  style={[styles.summaryLabel, { color: card.color }]}>
-                  {card.label}
-                </Text>
+  data={isError ? [] : (leads ?? [])}
+  keyExtractor={(item) => item.name}
+  showsVerticalScrollIndicator={false}
+  removeClippedSubviews
+  initialNumToRender={6}
+  maxToRenderPerBatch={8}
+  windowSize={10}
+  contentContainerStyle={[
+    styles.scrollContent,
+    {
+      flexGrow: 1,
+    },
+  ]}
+  ListHeaderComponent={
+    <>
+      {/* Summary Cards */}
+      <View style={styles.summaryRow}>
+        {summaryCards.map((card) => (
+          <View
+            key={card.label}
+            style={[
+              styles.summaryCard,
+              { backgroundColor: card.background },
+            ]}>
+            <Text
+              style={[
+                styles.summaryLabel,
+                { color: card.color },
+              ]}>
+              {card.label}
+            </Text>
 
-                <Text
-                  style={[styles.summaryValue, { color: card.color }]}>
-                  {card.value}
-                </Text>
-              </View>
-            ))}
+            <Text
+              style={[
+                styles.summaryValue,
+                { color: card.color },
+              ]}>
+              {card.value}
+            </Text>
           </View>
+        ))}
+      </View>
 
-          {/* Header */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Leads</Text>
+      {/* Header */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          Active Leads
+        </Text>
 
-            <TouchableOpacity activeOpacity={0.8}>
-              <Text style={styles.sortLabel}>Sort: Newest</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      }
+        <TouchableOpacity activeOpacity={0.8}>
+          <Text style={styles.sortLabel}>
+            Sort: Newest
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {isLoading && (
+        <View style={styles.stateRow}>
+          <ActivityIndicator
+            size="small"
+            color="#667085"
+          />
+
+          <Text style={styles.stateText}>
+            Loading leads…
+          </Text>
+        </View>
+      )}
+    </>
+  }
       renderItem={({ item: lead }) => (
         <View style={styles.leadCard}>
           <View style={styles.leadTopRow}>
@@ -186,15 +219,54 @@ export function LeadsDashboardScreen() {
           </View>
         </View>
       )}
+
+      ListEmptyComponent={
+    !isLoading ? (
+      isError ? (
+        <View style={styles.centerErrorContainer}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={52}
+            color="#98A2B3"
+          />
+
+          <Text style={styles.errorTitle}>
+            Unable to load leads
+          </Text>
+
+          <Text style={styles.errorSubtitle}>
+            Please check your internet connection
+            or try again later.
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.retryButton}
+            onPress={() => leadsQuery.refetch()}>
+            <Text style={styles.retryButtonText}>
+              Retry
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.centerErrorContainer}>
+          <Text style={styles.emptyText}>
+            No leads found.
+          </Text>
+        </View>
+      )
+    ) : null
+  }
     />
 
     {/* FAB */}
-    <TouchableOpacity
-      activeOpacity={0.9}
-      style={[styles.fab, { bottom: insets.bottom + 90 }]}
-      onPress={() => router.push('/modal')}>
-      <Ionicons name="add" size={28} color="#FFFFFF" />
-    </TouchableOpacity>
+  <TouchableOpacity
+    activeOpacity={0.9}
+    style={[styles.fab, { bottom: insets.bottom + 90 }]}
+    onPress={() => router.push('/modal')}>
+    <Ionicons name="add" size={28} color="#FFFFFF" />
+  </TouchableOpacity>
+
   </View>
 </SafeAreaView>
   );
@@ -378,21 +450,82 @@ scrollContent: {
   },
 
   fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F97316',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#F97316',
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    elevation: 8,
+  position: 'absolute',
+  right: 20,
+  width: 56,
+  height: 56,
+  borderRadius: 28,
+  backgroundColor: '#F97316',
+
+  alignItems: 'center',
+  justifyContent: 'center',
+
+  shadowColor: '#F97316',
+  shadowOpacity: 0.3,
+  shadowRadius: 12,
+  shadowOffset: {
+    width: 0,
+    height: 6,
   },
+
+  elevation: 30,
+  zIndex: 999,
+},
+  stateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+  },
+  stateText: {
+    color: '#667085',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyWrap: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: '#667085',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  errorTitle: {
+  marginTop: 16,
+  fontSize: 18,
+  fontWeight: '700',
+  color: '#111827',
+  textAlign: 'center',
+},
+centerErrorContainer: {
+  flex: 1,
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingHorizontal: 32,
+  paddingBottom: 120,
+},
+
+errorSubtitle: {
+  marginTop: 8,
+  fontSize: 14,
+  lineHeight: 22,
+  color: '#6B7280',
+  textAlign: 'center',
+},
+retryButton: {
+  marginTop: 24,
+  height: 48,
+  paddingHorizontal: 28,
+  borderRadius: 14,
+  backgroundColor: '#112A74',
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+retryButtonText: {
+  color: '#FFFFFF',
+  fontSize: 14,
+  fontWeight: '700',
+},
 });

@@ -1,16 +1,25 @@
 import { CreateLead } from '@/application/leads/create-lead';
 import { ListLeads } from '@/application/leads/list-leads';
-import { LeadMemoryRepository } from '@/adapters/leads/lead-memory-repository';
+import { LeadApiRepository } from '@/adapters/leads/lead-api-repository';
+import { EsafLeadsDatasource } from '@/data/datasource/esaf-leads-datasource';
 
-const leadRepo = new LeadMemoryRepository();
+import { FindCustomerByMobile } from '@/application/customers/find-customer';
+import { CustomerApiRepository } from '@/adapters/customers/customer-api-repository';
+import { EsafCustomerDatasource } from '@/data/datasource/esaf-customer-datasource';
+
+const leadRepo = new LeadApiRepository(new EsafLeadsDatasource());
+
+const customerRepo = new CustomerApiRepository(new EsafCustomerDatasource());
 
 export const leadUseCases = {
   listLeads: new ListLeads(leadRepo),
   createLead: new CreateLead(leadRepo),
 };
 
-export function addLead(lead: import('@/domain/leads/lead').Lead) {
-  leadUseCases.createLead.execute(lead);
+export const customerUseCases = {
+  findCustomerByMobile: new FindCustomerByMobile(customerRepo),
+};
+
+export function createLead(params: import('@/domain/leads/create-lead-params').CreateLeadParams) {
+  return leadUseCases.createLead.execute(params);
 }
-
-

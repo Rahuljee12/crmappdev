@@ -4,8 +4,8 @@ import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +17,8 @@ import {
 import { globalStyles } from '@/theme/globalStyles';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFindCustomerMutation } from '@/hooks/use-find-customer';
+import type { ExistingCustomer } from '@/domain/customers/customer';
 
 type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
 
@@ -26,104 +28,13 @@ type SearchState =
   | 'ntb'
   | 'prospect';
 
-type ExistingCustomer = {
-  name: string;
-  cif: string;
-  mobile: string;
-  initials: string;
-
-  accounts: {
-    title: string;
-    masked: string;
-    status: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }[];
-
-  leads: {
-    title: string;
-    subtitle: string;
-    status: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }[];
-
-  insights: {
-    text: string;
-    icon: keyof typeof Ionicons.glyphMap;
-  }[];
-};
-
-const TEST_NUMBERS = [
-  {
-    number: '9876543210',
-    label: 'Existing Customer',
-  },
-  {
-    number: '9123456780',
-    label: 'NTB Lead',
-  },
-  {
-    number: '9999999999',
-    label: 'New Prospect',
-  },
-];
-
-const EXISTING_CUSTOMERS: Record<
-  string,
-  ExistingCustomer
-> = {
-  '9876543210': {
-    name: 'Rajesh Kumar',
-    cif: 'CIF12345',
-    mobile: '9876543210',
-    initials: 'RK',
-
-    accounts: [
-      {
-        title: 'Savings Account',
-        masked: '•••• 4421',
-        status: 'Active',
-        icon: 'wallet-outline',
-      },
-      {
-        title: 'Fixed Deposit',
-        masked: '•••• 7781',
-        status: 'Matures 2027',
-        icon: 'cash-outline',
-      },
-    ],
-
-    leads: [
-      {
-        title: 'Home Loan',
-        subtitle: 'Lead L-9821',
-        status: 'Interested',
-        icon: 'home-outline',
-      },
-    ],
-
-    insights: [
-      {
-        text: 'Savings account has no nominee',
-        icon: 'sparkles-outline',
-      },
-      {
-        text: 'FD maturing soon',
-        icon: 'sparkles-outline',
-      },
-    ],
-  },
-};
-
 function digitsOnly(value: string) {
   return value.replace(/\D/g, '').slice(0, 10);
 }
 
-function resolveCustomer(number: string) {
-  return EXISTING_CUSTOMERS[number] ?? null;
-}
-
 export default function CustomersScreen() {
   const insets = useSafeAreaInsets();
+  const findCustomer = useFindCustomerMutation();
 
   const [mobile, setMobile] = useState('');
 
@@ -163,42 +74,20 @@ export default function CustomersScreen() {
       return;
     }
 
-    const customer =
-      resolveCustomer(formattedMobile);
-
-    if (customer) {
-      setResolvedCustomer(customer);
-      setSearchState('existing');
-      setSelectedTab('Accounts');
-      return;
-    }
-
-    if (formattedMobile === '9123456780') {
-      setSearchState('ntb');
-      return;
-    }
-
-    setSearchState('prospect');
-  };
-
-  const openDemo = (value: string) => {
-    setMobile(value);
-
-    const customer = resolveCustomer(value);
-
-    if (customer) {
-      setResolvedCustomer(customer);
-      setSearchState('existing');
-      setSelectedTab('Accounts');
-      return;
-    }
-
-    if (value === '9123456780') {
-      setSearchState('ntb');
-      return;
-    }
-
-    setSearchState('prospect');
+    findCustomer.mutate(formattedMobile, {
+      onSuccess: (customer) => {
+        if (customer) {
+          setResolvedCustomer(customer);
+          setSearchState('existing');
+          setSelectedTab('Accounts');
+          return;
+        }
+        setSearchState('prospect');
+      },
+      onError: () => {
+        setSearchState('prospect');
+      },
+    });
   };
 
   const showExistingCustomer =
@@ -271,50 +160,30 @@ export default function CustomersScreen() {
                     styles.disabledButton,
                 ]}
                 disabled={
-                  formattedMobile.length !== 10
+                  formattedMobile.length !== 10 ||
+                  findCustomer.isPending
                 }
                 onPress={handleSearch}>
-                <Ionicons
-                  name="search"
-                  size={18}
-                  color="#FFFFFF"
-                />
+                {findCustomer.isPending ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#FFFFFF"
+                  />
+                ) : (
+                  <Ionicons
+                    name="search"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                )}
 
                 <Text style={styles.searchButtonText}>
-                  Search
+                  {findCustomer.isPending
+                    ? 'Searching…'
+                    : 'Search'}
                 </Text>
               </TouchableOpacity>
 
-              <View style={styles.testCard}>
-                <View style={styles.testHeader}>
-                  <Ionicons
-                    name="information-circle-outline"
-                    size={18}
-                    color="#112A74"
-                  />
-
-                  <Text style={styles.testHeaderText}>
-                    Test Numbers
-                  </Text>
-                </View>
-
-                {TEST_NUMBERS.map((item) => (
-                  <Pressable
-                    key={item.number}
-                    style={styles.testRow}
-                    onPress={() =>
-                      openDemo(item.number)
-                    }>
-                    <Text style={styles.testNumber}>
-                      {item.number}
-                    </Text>
-
-                    <Text style={styles.testLabel}>
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
             </View>
           )}
 
@@ -416,7 +285,7 @@ export default function CustomersScreen() {
                         <View
                           style={styles.iconWrap}>
                           <Ionicons
-                            name={item.icon}
+                            name={item.icon as any}
                             size={22}
                             color="#1D4ED8"
                           />
@@ -467,7 +336,7 @@ export default function CustomersScreen() {
                             styles.orangeIconWrap
                           }>
                           <Ionicons
-                            name={item.icon}
+                            name={item.icon as any}
                             size={22}
                             color="#EA580C"
                           />
@@ -516,7 +385,7 @@ export default function CustomersScreen() {
                         <View
                           style={styles.iconWrap}>
                           <Ionicons
-                            name={item.icon}
+                            name={item.icon as any}
                             size={20}
                             color="#1D4ED8"
                           />
@@ -787,45 +656,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-  },
-
-  testCard: {
-    marginTop: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
-  },
-
-  testHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-
-  testHeaderText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  testRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-  },
-
-  testNumber: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  testLabel: {
-    fontSize: 12,
-    color: '#6B7280',
   },
 
   successBanner: {

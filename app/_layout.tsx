@@ -8,16 +8,17 @@ import { Stack } from 'expo-router';
 
 import { StatusBar } from 'expo-status-bar';
 
-import { Image, Text, TextInput, View } from 'react-native';
+import { Image, View } from 'react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 import 'react-native-reanimated';
 
 import { globalStyles } from '@/theme/globalStyles';
-import { Fonts } from '@/theme/theme';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import logo from '@/assets/images/icon.png';
+import { queryClient } from '@/core/query/query-client';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -43,43 +44,43 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider
-      value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack
-        screenOptions={{
-          animation: 'slide_from_right',
-        }}>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack
+          screenOptions={{
+            animation: 'slide_from_right',
+          }}>
 
-        {/* TABS */}
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            header: () => <AppHeader />,
-          }}
-        />
+          {/* TABS */}
+          <Stack.Screen
+            name="(tabs)"
+            options={{
+              header: () => <AppHeader />,
+            }}
+          />
 
 
-        {/* CASA FLOW */}
-        <Stack.Screen
-          name="casa"
-          options={{
-            headerShown: false,
-          }}
-        />
+          {/* CASA FLOW */}
+          <Stack.Screen
+            name="casa"
+            options={{
+              headerShown: false,
+            }}
+          />
 
-        {/* MODALS */}
-        <Stack.Screen
-          name="modal"
-          options={{
-            presentation: 'modal',
-            headerShown: false,
-          }}
-        />
-      </Stack>
+          {/* MODALS */}
+          <Stack.Screen
+            name="modal"
+            options={{
+              presentation: 'modal',
+              headerShown: false,
+            }}
+          />
+        </Stack>
 
-      <StatusBar style="dark" />
-    </ThemeProvider>
+        <StatusBar style="dark" />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
-
-

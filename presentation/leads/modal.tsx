@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Dimensions,
   Keyboard,
   KeyboardAvoidingView,
@@ -16,8 +17,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { addLead } from '@/app/lead-store';
-import type { Lead } from '@/domain/leads/lead';
+import { useCreateLeadMutation } from '@/hooks/use-create-lead';
 
 type Step = 1 | 2 | 3;
 
@@ -149,6 +149,7 @@ export function NewLeadModalScreen() {
 
   const selectedProductCode =
     PRODUCT_CODES.find((item) => item.label === productCode) ?? PRODUCT_CODES[1];
+  const createLead = useCreateLeadMutation();
 
   const progressWidth = useMemo(() => {
     if (step === 1) return [1, 0, 0];
@@ -179,17 +180,41 @@ export function NewLeadModalScreen() {
   };
 
   const handleSubmitLead = () => {
-    const payload: Lead = {
-      name: 'New Lead',
-      product: selectedProductCode.name,
-      amount: '₹ 0',
-      source: `via ${leadSource}`,
-      time: 'Just now',
-      status: 'Hot',
-    };
+    const mobileNumber = mobile.trim();
+    const interestedProduct =
+      productType === 'Savings'
+        ? 'SA'
+        : productType === 'Current'
+          ? 'CA'
+          : productType === 'Term Deposit'
+            ? 'FD'
+            : productType === 'Recurring Deposit'
+              ? 'RD'
+              : productType === 'Personal Loan'
+                ? 'PL'
+                : productType === 'Mortgage Loan'
+                  ? 'ML'
+                  : 'SA';
 
-    addLead(payload);
-    router.back();
+    const extractedCode =
+      selectedProductCode.code.replace(/\D/g, '') || '3008';
+
+    createLead.mutate(
+      {
+        mobileNumber,
+        leadSource: leadSource === 'Select source' ? 'Walk-in' : leadSource,
+        interestedProduct,
+        productCode: extractedCode,
+      },
+      {
+        onSuccess: () => {
+          router.back();
+        },
+        onError: () => {
+          Alert.alert('Lead creation failed', 'Please try again.');
+        },
+      },
+    );
   };
 
   const handleOtpChange = (value: string, index: number) => {
@@ -912,7 +937,12 @@ export function NewLeadModalScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={[styles.footerButton, styles.primaryButton]}
+                  disabled={createLead.isPending}
+                  style={[
+                    styles.footerButton,
+                    styles.primaryButton,
+                    createLead.isPending && styles.primaryButtonDisabled,
+                  ]}
                   onPress={handleSubmitLead}>
                   <Text style={styles.primaryButtonText}>Submit lead</Text>
                 </TouchableOpacity>
@@ -1495,4 +1525,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-
