@@ -73,7 +73,7 @@ export function LeadsDashboardScreen() {
 
     <FlatList
   data={isError ? [] : (leads ?? [])}
-  keyExtractor={(item) => item.name}
+  keyExtractor={(item) => item.id}
   showsVerticalScrollIndicator={false}
   removeClippedSubviews
   initialNumToRender={6}

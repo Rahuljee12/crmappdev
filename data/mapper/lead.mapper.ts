@@ -33,14 +33,29 @@ export function mapEsafLeadsToDomain(dto: EsafFetchLeadsResponseDto): Lead[] {
   const timestamp = dto.data?.timestamp;
 
   return leads.map((l) => {
-    const productType = l.productType?.[0];
-    return {
-      name: safeName(l.firstName, l.lastName),
-      product: productLabel(productType, l.productCode),
-      amount: '—',
-      source: l.leadSource ? `via ${l.leadSource}` : '—',
-      time: timestamp ? new Date(timestamp).toLocaleString() : '—',
-      status: leadStatusFromProduct(productType),
-    };
-  });
+  const productType = l.productType?.[0];
+
+  return {
+    id: l.leadId ?? crypto.randomUUID(),
+
+    name: safeName(l.firstName, l.lastName),
+
+    product: productLabel(
+      productType,
+      l.productCode,
+    ),
+
+    amount: '—',
+
+    source: l.leadSource
+      ? `via ${l.leadSource}`
+      : '—',
+
+    time: timestamp
+      ? new Date(timestamp).toLocaleString()
+      : '—',
+
+    status: leadStatusFromProduct(productType),
+  };
+});
 }

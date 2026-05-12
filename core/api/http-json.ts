@@ -32,10 +32,12 @@ export async function httpJson<T>(
         ? input
         : undefined;
 
-    log.debug('[httpJson] request', {
+    // FULL REQUEST LOG
+    log.debug('[httpJson] REQUEST', {
       url,
       method: init?.method,
-      hasBody: Boolean(init?.body),
+      headers: init?.headers,
+      body: init?.body,
     });
 
     let res: Response;

@@ -37,7 +37,7 @@ export class EsafLeadsDatasource {
   async createLead(dto: EsafCreateLeadRequestDto) {
 
     const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/mcrm/lead-creation-v1/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/lead-creation/1.0`;
 
     return httpJson<EsafCreateLeadResponseDto>(url, {
       method: 'POST',
