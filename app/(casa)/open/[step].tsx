@@ -29,6 +29,7 @@ const FLOW_STEPS: CasaOpenStep[] = [
   'product',
   'nominee',
   'review',
+  'submit',
 ];
 
 const DEMO_NUMBERS = {
@@ -338,8 +339,6 @@ export default function AccountCreationFlowScreen() {
   const returnToReview = asString(params.returnToReview) === 'review';
   const rawType = asString(params.type);
   const accountType = (rawType in PRODUCT_CODES ? rawType : 'Savings') as CasaAccountType;
-  const effectiveProductType = productType in PRODUCT_CODES ? productType : accountType;
-  const product = PRODUCT_CODES[effectiveProductType] ?? PRODUCT_CODES.Savings;
 
   const [mobile, setMobile] = useState(asString(params.mobile));
   const [otpSent, setOtpSent] = useState(false);
@@ -422,7 +421,6 @@ export default function AccountCreationFlowScreen() {
     marketingOptOut: true,
     transactional: true,
   });
-  const [submitted, setSubmitted] = useState(false);
   const otpRefs = useRef<(TextInput | null)[]>([]);
   const documentOtpRefs = useRef<(TextInput | null)[]>([]);
   const otpVerifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -430,6 +428,9 @@ export default function AccountCreationFlowScreen() {
   const otpVerificationStartedRef = useRef(false);
   const documentOtpVerificationStartedRef = useRef(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownKey | null>(null);
+
+  const effectiveProductType = productType in PRODUCT_CODES ? productType : accountType;
+  const product = PRODUCT_CODES[effectiveProductType] ?? PRODUCT_CODES.Savings;
 
   const otpComplete = otpDigits.every((digit) => digit.length === 1);
   const documentOtpComplete = documentOtpDigits.every((digit) => digit.length === 1);
@@ -522,7 +523,7 @@ export default function AccountCreationFlowScreen() {
       return;
     }
     if (currentStepIndex === 0) {
-      router.push('/accounts');
+      router.push('/(tabs)/accounts');
       return;
     }
     const previousStep = FLOW_STEPS[Math.max(currentStepIndex - 1, 0)];
@@ -537,10 +538,14 @@ export default function AccountCreationFlowScreen() {
   };
 
   useEffect(() => {
-    if (submitted && currentStep !== 'submit') {
-      setSubmitted(false);
-    }
-  }, [currentStep, submitted]);
+    if (currentStep !== 'submit') return;
+
+    const timer = setTimeout(() => {
+      router.replace('/(tabs)/accounts');
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [currentStep]);
 
   useEffect(() => {
     if (!otpSent || !otpComplete || otpVerified || otpVerificationStartedRef.current) return;
@@ -1805,7 +1810,6 @@ export default function AccountCreationFlowScreen() {
               }
               onPress={() => {
                 if (currentStep === 'review') {
-                  setSubmitted(true);
                   handleStepNavigation('submit');
                   return;
                 }
@@ -1851,7 +1855,7 @@ export default function AccountCreationFlowScreen() {
             <TouchableOpacity
               activeOpacity={0.85}
               style={styles.footerButton}
-              onPress={() => router.push('/accounts')}>
+              onPress={() => router.replace('/(tabs)/accounts')}>
               <Text style={styles.footerSecondaryText}>Back to accounts</Text>
             </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.85} style={styles.footerButton} onPress={() => router.back()}>
@@ -1860,7 +1864,7 @@ export default function AccountCreationFlowScreen() {
             <TouchableOpacity
               activeOpacity={0.85}
               style={[styles.footerButton, styles.primaryFooterButton]}
-              onPress={() => router.push('/accounts')}>
+              onPress={() => router.replace('/(tabs)/accounts')}>
               <Text style={styles.footerPrimaryText}>Done</Text>
             </TouchableOpacity>
           </View>

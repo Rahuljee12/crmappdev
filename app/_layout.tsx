@@ -66,12 +66,14 @@ function AppContent() {
           }}
         />
 
-        <Stack.Screen
-          name="casa"
-          options={{
-            headerShown: false,
-          }}
-        />
+
+          {/* CASA FLOW */}
+          <Stack.Screen
+            name="(casa)"
+            options={{
+              headerShown: false,
+            }}
+          />
 
         <Stack.Screen
           name="modal"
