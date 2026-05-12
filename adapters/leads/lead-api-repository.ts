@@ -42,21 +42,121 @@ export class LeadApiRepository implements LeadRepository {
       process.env.EXPO_PUBLIC_ESAF_MOBILE_COUNTRY_CODE ?? '91';
 
     await this.ds.createLead({
-      request: {
-        salutation: params.salutation,
-        firstName: params.firstName,
-        lastName: params.lastName,
-        category: 'I',
-        leadSource: params.leadSource,
-        mobileNumber: params.mobileNumber,
-        mobileCountryCode,
-        emailAddress: params.emailAddress,
-        homeBranchCode,
-        leadInterestedProduct: params.interestedProduct,
-        productCode: params.productCode,
-        lcEmpCode,
-        lgEmpCode,
-      },
-    });
+  request: {
+    salutation: 'Mrs.',
+    firstName: 'Avni',
+    lastName: 'Sharma',
+
+    category: 'I',
+    leadSource: 'Cold Call',
+    leadJobTitle: 'Manager',
+
+    mobileNumber: '2345678910',
+    mobileCountryCode: '91',
+
+    officePhone: '6522367250',
+    officePhoneCountryCode: '91',
+
+    emailAddress: 'kokotest@gmail.com',
+
+    homeBranchCode: '1155',
+
+    leadInterestedProduct: 'SA',
+    productCode: '3008',
+
+    companyName: '',
+
+    lcEmpCode: 'BM02',
+    lgEmpCode: 'AS90132',
+
+    permanentAddressStreet:
+      'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
+
+    permanentAddressStreet2: 'Ramgondanahalli',
+
+    permanentAddressStreet3: 'Whitefield',
+
+    permanentAddressCountryCode: 'IN',
+    permanentAddressStateCode: 'KA',
+
+    // IMPORTANT:
+    // use same valid city code from working fetch response
+    permanentAddressCityCode: '248120',
+
+    permanentAddressPostalCode: '560066',
+
+    communicationAddressStreet:
+      'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
+
+    communicationAddressStreet2: 'Ramgondanahalli',
+
+    communicationAddressStreet3: 'Whitefield',
+
+    communicationAddressCountryCode: 'IN',
+    communicationAddressStateCode: 'KA',
+
+    communicationAddressCityCode: '248120',
+
+    communicationAddressPostalCode: '560066',
+
+    cDigiPin: '804B5600',
+    pDigiPin: 'G7X4-K9R2',
+
+    campaignCode: 'A1345',
+
+    panNumber: 'DSFTA7621L',
+
+    leadDescription:
+      'The Lead is a Manager in ARKEA Group of Advertisers Pvt Ltd. He has been with the firm for 12 years. He is part of some of the prestigious projects for their firm. He has goodwill among peers, colleagues and employers.',
+
+    caObsRefId: '',
+    caMinBalance: '',
+    caOppStatus: '',
+
+    saObsRefId: 'SA8432211',
+    saMinBalance: '5000.00',
+    saOppStatus: 'Open',
+
+    plObsRefId: '',
+    plOppAmount: '',
+    plOppStatus: '',
+
+    aulObsRefId: '',
+    aulOppAmount: '',
+    aulOppStatus: '',
+
+    dsglObsRefId: '',
+    dsglOppAmount: '',
+    dsglOppStatus: '',
+
+    mlObsRefId: '',
+    mlOppAmount: '',
+    mlOppStatus: '',
+
+    fdObsRefId: '',
+    fdOppAmount: '',
+    fdOppStatus: '',
+
+    rdObsRefId: '',
+    rdOppAmount: '',
+    rdOppStatus: '',
+
+    odObsRefId: '',
+    odOppAmount: '',
+    odOppStatus: '',
+
+    alObsRefId: '',
+    alOppAmount: '',
+    alOppStatus: '',
+
+    msmeObsRefId: '',
+    msmeOppAmount: '',
+    msmeOppStatus: '',
+
+    molObsRefId: '',
+    molOppAmount: '',
+    molOppStatus: '',
+  },
+});
   }
 }

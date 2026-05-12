@@ -19,7 +19,7 @@ export const log = {
   },
   error: (...args: unknown[]) => {
     if (!enabled()) return;
-    console.error('[ERROR]', ...args);
+    //console.error('[ERROR]', ...args);
   },
 } satisfies Record<LogLevel, (...args: unknown[]) => void>;
 

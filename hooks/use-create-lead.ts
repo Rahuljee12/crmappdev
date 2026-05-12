@@ -19,7 +19,7 @@ export function useCreateLeadMutation() {
     mutationFn: (params: CreateLeadParams) => createLead(params),
     onSuccess: async (_data, variables) => {
       const criteria = {
-        mobileNumber: variables.mobileNumber,
+        mobileNumber: "2345678910",
         emailAddress: variables.emailAddress,
         interestedProduct: variables.interestedProduct,
       };
