@@ -11,7 +11,7 @@ import type {
 export class EsafCustomerDatasource {
   async findCustomer(dto: EsafFindCustomerRequestDto) {
     const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/aoco/find-customer/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/find-customer/1.0`;
 
     return httpJson<EsafFindCustomerResponseDto>(url, {
       method: 'POST',

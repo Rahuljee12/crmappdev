@@ -22,7 +22,6 @@ export class LeadApiRepository implements LeadRepository {
         interestedProduct: criteria.interestedProduct,
       },
     });
-
     return mapEsafLeadsToDomain(dto);
   }
 

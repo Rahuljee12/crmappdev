@@ -19,6 +19,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import logo from '@/assets/images/icon.png';
 import { queryClient } from '@/core/query/query-client';
+import { usePrefetchAuthToken } from '@/hooks/use-prefetch-auth-token';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -40,47 +41,56 @@ function AppHeader() {
   );
 }
 
-export default function RootLayout() {
+function AppContent() {
+  usePrefetchAuthToken();
+
   const colorScheme = useColorScheme();
 
   return (
+    <ThemeProvider
+      value={
+        colorScheme === 'dark'
+          ? DarkTheme
+          : DefaultTheme
+      }>
+
+      <Stack
+        screenOptions={{
+          animation: 'slide_from_right',
+        }}>
+
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            header: () => <AppHeader />,
+          }}
+        />
+
+        <Stack.Screen
+          name="casa"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="modal"
+          options={{
+            presentation: 'modal',
+            headerShown: false,
+          }}
+        />
+      </Stack>
+
+      <StatusBar style="dark" />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack
-          screenOptions={{
-            animation: 'slide_from_right',
-          }}>
-
-          {/* TABS */}
-          <Stack.Screen
-            name="(tabs)"
-            options={{
-              header: () => <AppHeader />,
-            }}
-          />
-
-
-          {/* CASA FLOW */}
-          <Stack.Screen
-            name="casa"
-            options={{
-              headerShown: false,
-            }}
-          />
-
-          {/* MODALS */}
-          <Stack.Screen
-            name="modal"
-            options={{
-              presentation: 'modal',
-              headerShown: false,
-            }}
-          />
-        </Stack>
-
-        <StatusBar style="dark" />
-      </ThemeProvider>
+      <AppContent />
     </QueryClientProvider>
   );
 }

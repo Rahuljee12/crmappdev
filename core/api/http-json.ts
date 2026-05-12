@@ -1,3 +1,5 @@
+import { log } from '@/core/utils/logger';
+
 export type HttpJsonError = {
   name: 'HttpJsonError';
   status: number;
@@ -18,19 +20,63 @@ export async function httpJson<T>(
   input: RequestInfo,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(input, init);
-  if (!res.ok) {
-    const bodyText = await safeReadText(res);
-    const err: HttpJsonError = {
-      name: 'HttpJsonError',
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, 30000);
+
+  try {
+    const url =
+      typeof input === 'string'
+        ? input
+        : undefined;
+
+    log.debug('[httpJson] request', {
+      url,
+      method: init?.method,
+      hasBody: Boolean(init?.body),
+    });
+
+    let res: Response;
+    try {
+      res = await fetch(input, {
+        ...init,
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      log.error('[httpJson] fetch failed', {
+        url,
+        method: init?.method,
+        error: err,
+        name: err?.name,
+        message: err?.message,
+      });
+      throw err;
+    }
+
+    const text = await res.text();
+
+
+    // Log via logger (not console) so it appears in Android logcat reliably
+    log.error('[httpJson] raw response', {
+      url,
+      method: init?.method,
       status: res.status,
-      message: `Request failed with ${res.status}`,
-      url: typeof input === 'string' ? input : res.url,
-      bodyText,
-    };
-    throw err;
+      ok: res.ok,
+      bodyText: text,
+    });
+
+    if (!res.ok) {
+      throw {
+        status: res.status,
+        body: text,
+      };
+    }
+
+
+    return JSON.parse(text) as T;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return (await res.json()) as T;
 }
-

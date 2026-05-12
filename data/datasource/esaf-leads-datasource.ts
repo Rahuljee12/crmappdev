@@ -12,23 +12,32 @@ import type {
 
 export class EsafLeadsDatasource {
   async fetchLeads(dto: EsafFetchLeadsRequestDto) {
-    const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/aoco/fetch-lead/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/fetch-lead/1.0`;
 
-    return httpJson<EsafFetchLeadsResponseDto>(url, {
+    console.log('[esaf-leads] fetchLeads start');
+
+    const token = await getEsafAccessToken();
+
+    console.log('[esaf-leads] fetchLeads response', token);
+
+    const response = await httpJson<EsafFetchLeadsResponseDto>(url, {
       method: 'POST',
       headers: buildEsafHeaders({
         bearerToken: token,
-        channel: 'AOCO',
-        externalReferencePrefix: 'AOCO',
+        channel: 'API',
+        externalReferencePrefix: 'API-12309946299324567-122880',
       }),
       body: JSON.stringify(dto),
     });
+
+    console.log('[esaf-leads] fetchLeads response', response);
+    return response;
   }
 
   async createLead(dto: EsafCreateLeadRequestDto) {
+
     const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/aoco/lead-creation-v1/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/lead-creation-v1/1.0`;
 
     return httpJson<EsafCreateLeadResponseDto>(url, {
       method: 'POST',

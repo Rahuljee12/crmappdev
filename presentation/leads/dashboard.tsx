@@ -40,6 +40,10 @@ export function LeadsDashboardScreen() {
   const leads = leadsQuery.data;
   const isLoading = criteria.isLoading || leadsQuery.isLoading;
   const isError = criteria.isError || leadsQuery.isError;
+  const errorMessage =
+    (criteria.error instanceof Error ? criteria.error.message : null) ??
+    (leadsQuery.error instanceof Error ? leadsQuery.error.message : null) ??
+    'Unable to load leads.';
 
   const summaryCards = useMemo(() => {
     const byStatus: Record<LeadStatus, number> = {
@@ -133,6 +137,14 @@ export function LeadsDashboardScreen() {
 
           <Text style={styles.stateText}>
             Loading leads…
+          </Text>
+        </View>
+      )}
+
+      {!isLoading && isError && (
+        <View style={styles.stateRow}>
+          <Text style={styles.stateText}>
+            {errorMessage}
           </Text>
         </View>
       )}

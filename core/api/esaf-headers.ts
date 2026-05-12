@@ -17,9 +17,7 @@ export function buildEsafHeaders(params: {
   bearerToken?: string;
 }) {
   const channel = params.channel ?? ESAF_DEFAULT_CHANNEL;
-  const externalReferenceNumber = buildExternalReferenceNumber(
-    params.externalReferencePrefix ?? 'AOCO',
-  );
+  const externalReferenceNumber = 'API-12309946299324567-122880';
 
   const headers: Record<string, string> = {
     channel,

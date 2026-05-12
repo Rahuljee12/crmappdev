@@ -4,16 +4,16 @@ export function requireEsafApiBaseUrl() {
   return value;
 }
 
-export const ESAF_OAUTH_SCOPE =
-  process.env.EXPO_PUBLIC_ESAF_OAUTH_SCOPE ?? 'CRMMobileApp';
+export const ESAF_OAUTH_SCOPE = 'CRMMobileApp';
 
 export const ESAF_OAUTH_GRANT_TYPE = 'client_credentials';
 
 export function requireEsafOauthBasicAuth() {
-  const value = process.env.EXPO_PUBLIC_ESAF_OAUTH_BASIC_AUTH;
-  if (!value) throw new Error('Missing env: EXPO_PUBLIC_ESAF_OAUTH_BASIC_AUTH');
+  const value = 'Basic a2ZxZVYzUjV1eGZmc2huYVNhX2czckJtc3RZYTpja2l0d2FFYTYwQ05ac1kyUlZxbE0zQXA2UFFh';
+  if (!value)
+    throw new Error('Missing env: EXPO_PUBLIC_ESAF_OAUTH_BASIC_AUTH');
   return value;
 }
 
-export const ESAF_DEFAULT_CHANNEL =
-  process.env.EXPO_PUBLIC_ESAF_CHANNEL ?? 'API';
+
+export const ESAF_DEFAULT_CHANNEL = 'API';
