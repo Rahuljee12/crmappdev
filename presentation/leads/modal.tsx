@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Keyboard,
@@ -18,6 +19,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCreateLeadMutation } from '@/hooks/use-create-lead';
+import { useSendLeadOtpMutation } from '@/hooks/use-send-lead-otp';
+import { useVerifyLeadOtpMutation } from '@/hooks/use-verify-lead-otp';
+import { log } from '@/core/utils/logger';
 
 type Step = 1 | 2 | 3;
 
@@ -116,6 +120,8 @@ export function NewLeadModalScreen() {
   const [incomeBandOpen, setIncomeBandOpen] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpDigits, setOtpDigits] = useState<string[]>(Array(6).fill(''));
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [otpVerified, setOtpVerified] = useState(false);
   const [consents, setConsents] = useState([false, false, false]);
   const [customerType, setCustomerType] = useState('Select type');
   const [customerTypeOpen, setCustomerTypeOpen] = useState(false);
@@ -150,6 +156,11 @@ export function NewLeadModalScreen() {
   const selectedProductCode =
     PRODUCT_CODES.find((item) => item.label === productCode) ?? PRODUCT_CODES[1];
   const createLead = useCreateLeadMutation();
+  const sendOtp = useSendLeadOtpMutation();
+  const verifyOtp = useVerifyLeadOtpMutation();
+
+  const isAnyApiPending =
+    sendOtp.isPending || verifyOtp.isPending || createLead.isPending;
 
   const progressWidth = useMemo(() => {
     if (step === 1) return [1, 0, 0];
@@ -180,6 +191,15 @@ export function NewLeadModalScreen() {
   };
 
   const handleSubmitLead = () => {
+    if (!otpVerified || !otpRequestId) {
+      Alert.alert('OTP verification required', 'Verify the OTP before submitting.');
+      return;
+    }
+
+    if (createLead.isPending) return;
+
+
+
     const mobileNumber = mobile.trim();
     const interestedProduct =
       productType === 'Savings'
@@ -195,6 +215,7 @@ export function NewLeadModalScreen() {
                 : productType === 'Mortgage Loan'
                   ? 'ML'
                   : 'SA';
+
 
     const extractedCode =
       selectedProductCode.code.replace(/\D/g, '') || '3008';
@@ -289,6 +310,13 @@ export function NewLeadModalScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.screen}>
+        {isAnyApiPending ? (
+          <View style={styles.apiLoaderOverlay}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.apiLoaderText}>Please wait…</Text>
+          </View>
+        ) : null}
+
         <View style={styles.topBar}>
           <TouchableOpacity activeOpacity={0.85} style={styles.backPill} onPress={goBack}>
             <Ionicons name="chevron-back" size={18} color="#FFFFFF" />
@@ -436,19 +464,33 @@ export function NewLeadModalScreen() {
                   ))}
 
                   <Text style={styles.errorText}>Both required consents must be captured to send OTP.</Text>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    disabled={!canSendOtp}
-                    onPress={() => {
-                      if (canSendOtp) {
-                        setOtpSent(true);
-                        setOtpDigits(Array(6).fill(''));
-                      }
-                    }}
-                    style={[
-                      styles.otpButton,
-                      canSendOtp ? styles.otpButtonEnabled : styles.otpButtonDisabled,
-                    ]}>
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      disabled={!canSendOtp || sendOtp.isPending}
+                      onPress={() => {
+                        if (!canSendOtp) return;
+
+                        const phone = mobile.trim();
+                        sendOtp.mutate(
+                          { phone },
+                          {
+                            onSuccess: (data) => {
+                              const requestId = data?.request_id ?? null;
+                              setOtpRequestId(requestId);
+                              setOtpSent(true);
+                              setOtpDigits(Array(6).fill(''));
+                              setOtpVerified(false);
+                            },
+                            onError: () => {
+                              Alert.alert('OTP send failed', 'Please try again.');
+                            },
+                          },
+                        );
+                      }}
+                      style={[
+                        styles.otpButton,
+                        canSendOtp ? styles.otpButtonEnabled : styles.otpButtonDisabled,
+                      ]}>
                     <Ionicons name="paper-plane-outline" size={18} color="#FFFFFF" />
                     <Text style={styles.otpButtonText}>Send OTP</Text>
                   </TouchableOpacity>
@@ -485,8 +527,50 @@ export function NewLeadModalScreen() {
                       ))}
                     </View>
                     <Text style={styles.otpHelpText}>
-                      Enter any 6-digit OTP to continue. Current value: {otpValue || '------'}
+                      Enter OTP to continue.
                     </Text>
+
+                    <TouchableOpacity
+                      activeOpacity={0.85}
+                      disabled={!otpComplete || !otpRequestId || verifyOtp.isPending || otpVerified}
+                      onPress={() => {
+                        if (!otpRequestId) return;
+
+                        log.debug("verify otp key: ",otpRequestId)
+                        verifyOtp.mutate(
+                          {
+                            phone: mobile.trim(),
+                            otp: otpValue,
+                            requestId: otpRequestId,
+                          },
+                          {
+                            onSuccess: () => {
+                              setOtpVerified(true);
+                            },
+                            onError: () => {
+                              Alert.alert('OTP verification failed', 'Please enter the correct OTP.');
+                              setOtpVerified(false);
+                            },
+                          },
+                        );
+                      }}
+                      style={{
+                        marginTop: 10,
+                        paddingVertical: 12,
+                        paddingHorizontal: 14,
+                        backgroundColor: otpComplete && !otpVerified ? '#1D4ED8' : '#D8DDE8',
+                        borderRadius: 12,
+                        alignItems: 'center',
+                      }}>
+                      <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>
+                        {otpVerified
+                          ? 'OTP Verified'
+                          : verifyOtp.isPending
+                            ? 'Verifying…'
+                            : 'Verify OTP'}
+                      </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity activeOpacity={0.8}>
                       <Text style={styles.resendLink}>Resend OTP</Text>
                     </TouchableOpacity>
@@ -905,7 +989,7 @@ export function NewLeadModalScreen() {
 
         {step === 1 ? (
           <View style={styles.footer}>
-            <TouchableOpacity activeOpacity={0.85} style={styles.footerButton}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.footerButton} disabled={isAnyApiPending}>
               <Text style={styles.secondaryButtonText}>Save draft</Text>
             </TouchableOpacity>
             <TouchableOpacity activeOpacity={0.85} style={styles.footerButton} onPress={goBack}>
@@ -929,12 +1013,18 @@ export function NewLeadModalScreen() {
           <View style={styles.footer}>
             {step === 3 ? (
               <>
-                <TouchableOpacity activeOpacity={0.85} style={styles.footerButton}>
+                <TouchableOpacity activeOpacity={0.85} style={styles.footerButton} disabled={isAnyApiPending}>
                   <Text style={styles.secondaryButtonText}>Save draft</Text>
                 </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.85} style={styles.footerButton} onPress={() => setStep(2)}>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.footerButton}
+                  onPress={() => setStep(2)}
+                  disabled={isAnyApiPending}>
                   <Text style={styles.secondaryButtonText}>Back</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   activeOpacity={0.85}
                   disabled={createLead.isPending}
@@ -957,14 +1047,16 @@ export function NewLeadModalScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  disabled={!identityOtpComplete}
+                  disabled={!identityOtpComplete || !otpVerified || verifyOtp.isPending}
                   style={[
                     styles.footerButton,
                     styles.primaryButton,
-                    !identityOtpComplete && styles.primaryButtonDisabled,
+                    (!identityOtpComplete || !otpVerified || verifyOtp.isPending) && styles.primaryButtonDisabled,
                   ]}
                   onPress={onNext}>
-                  <Text style={styles.primaryButtonText}>Next</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {otpVerified ? 'Next' : 'Verify OTP'}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}
@@ -1522,6 +1614,25 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
+    fontWeight: '800',
+  },
+
+  apiLoaderOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2000,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  apiLoaderText: {
+    marginTop: 12,
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
   },
 });

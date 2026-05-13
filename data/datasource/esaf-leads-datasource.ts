@@ -10,6 +10,29 @@ import type {
   EsafFetchLeadsResponseDto,
 } from '../dto/esaf-leads.dto';
 
+type OtpSendResponseDto = {
+  request_id?: string;
+  received_time?: string;
+  event?: string;
+  response?: {
+    sms?: {
+      status?: string;
+      destination?: string;
+      msg_id?: string;
+    };
+  };
+  _message?: string;
+  request_count?: number;
+  error?: number;
+};
+
+type OtpVerifyResponseDto = {
+  status?: string;
+  response?: unknown;
+  request_id?: string;
+  error?: unknown;
+};
+
 export class EsafLeadsDatasource {
   async fetchLeads(dto: EsafFetchLeadsRequestDto) {
     const url = `${requireEsafApiBaseUrl()}/int/mcrm/fetch-lead/1.0`;
@@ -49,4 +72,52 @@ export class EsafLeadsDatasource {
       body: JSON.stringify(dto),
     });
   }
+
+  async sendLeadCreationOtp(dto: {
+    phone: string;
+    channel?: string;
+    externalReferenceNumber?: string;
+  }): Promise<OtpSendResponseDto> {
+    const token = await getEsafAccessToken();
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/event/otp`;
+
+    const response = await httpJson<OtpSendResponseDto>(url, {
+      method: 'POST',
+      headers: buildEsafHeaders({
+        bearerToken: token,
+        channel: dto.channel ?? 'AOCO',
+        externalReferencePrefix: dto.externalReferenceNumber ?? 'API-12309946299324567-122880',
+      }),
+      body: JSON.stringify({
+        event: 'AOCO_ACCOUNT_OPENING_OTP',
+        to: { phone: dto.phone },
+      }),
+    });
+
+    return response;
+  }
+
+ async verifyLeadCreationOtp(dto: {
+  phone: string;
+  otp: string;
+  requestId: string;
+}): Promise<OtpVerifyResponseDto> {
+
+  const token = await getEsafAccessToken();
+
+  const url =
+    `${requireEsafApiBaseUrl()}/int/mcrm/verify/validate` +
+    `?otp=${encodeURIComponent(dto.otp)}` +
+    `&request_id=${encodeURIComponent(dto.requestId)}`;
+
+  return httpJson<OtpVerifyResponseDto>(url, {
+    method: 'POST',
+    headers: buildEsafHeaders({
+        bearerToken: token,
+        channel: 'API',
+        externalReferencePrefix: 'API-12309946299324567-122880',
+      }),
+  });
 }
+}
+
