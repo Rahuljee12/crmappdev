@@ -41,18 +41,36 @@ export class LeadApiRepository implements LeadRepository {
     const mobileCountryCode =
       process.env.EXPO_PUBLIC_ESAF_MOBILE_COUNTRY_CODE ?? '91';
 
+    // const defaultStateCode = this.required(
+    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_STATE_CODE,
+    //   'EXPO_PUBLIC_ESAF_DEFAULT_STATE_CODE',
+    // );
+    // const defaultCityCode = this.required(
+    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_CITY_CODE,
+    //   'EXPO_PUBLIC_ESAF_DEFAULT_CITY_CODE',
+    // );
+    // const defaultCountryCode =
+    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_COUNTRY_CODE ?? 'IN';
+
+    // const permanentAddressStreet = params.permanentAddressStreet ?? '';
+    // const permanentAddressPostalCode = params.permanentAddressPostalCode ?? '';
+    // const communicationAddressStreet =
+    //   params.communicationAddressStreet ?? params.permanentAddressStreet;
+    // const communicationAddressPostalCode =
+    //   params.communicationAddressPostalCode ?? params.permanentAddressPostalCode;
+
     await this.ds.createLead({
-  request: {
+      request: {
     salutation: 'Mrs.',
     firstName: 'Avni',
     lastName: 'Sharma',
 
-    category: 'I',
+        category: 'I',
     leadSource: 'Cold Call',
     leadJobTitle: 'Manager',
 
-    mobileNumber: '2345678910',
-    mobileCountryCode: '91',
+        mobileNumber: params.mobileNumber,
+        mobileCountryCode,
 
     officePhone: '6522367250',
     officePhoneCountryCode: '91',
@@ -64,17 +82,13 @@ export class LeadApiRepository implements LeadRepository {
     leadInterestedProduct: 'SA',
     productCode: '3008',
 
-    companyName: '',
+        companyName: '',
 
-    lcEmpCode: 'BM02',
-    lgEmpCode: 'AS90132',
+        lcEmpCode,
+        lgEmpCode,
 
     permanentAddressStreet:
       'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
-
-    permanentAddressStreet2: 'Ramgondanahalli',
-
-    permanentAddressStreet3: 'Whitefield',
 
     permanentAddressCountryCode: 'IN',
     permanentAddressStateCode: 'KA',
@@ -156,7 +170,7 @@ export class LeadApiRepository implements LeadRepository {
     molObsRefId: '',
     molOppAmount: '',
     molOppStatus: '',
-  },
-});
+      },
+    });
   }
 }

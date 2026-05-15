@@ -54,20 +54,20 @@ export type EsafCreateLeadRequestDto = {
     lgEmpCode?: string;
 
     // Permanent Address
-    permanentAddressStreet: string;
-    permanentAddressStateCode: string;
-permanentAddressCityCode: string;
-permanentAddressPostalCode: string;
-permanentAddressCountryCode?: string;
+    permanentAddressStreet?: string;
+    permanentAddressStateCode?: string;
+    permanentAddressCityCode?: string;
+    permanentAddressPostalCode?: string;
+    permanentAddressCountryCode?: string;
 
     // Communication Address
     communicationAddressStreet?: string;
     communicationAddressStreet2?: string;
     communicationAddressStreet3?: string;
     communicationAddressCountryCode?: string;
-    communicationAddressStateCode: string;
-communicationAddressCityCode: string;
-communicationAddressPostalCode: string,
+    communicationAddressStateCode?: string;
+    communicationAddressCityCode?: string;
+    communicationAddressPostalCode?: string;
 
     // Digi Pin
     cDigiPin?: string;
@@ -154,4 +154,3 @@ export type EsafCreateLeadResponseDto = {
     statusMessage?: string;
   }[];
 };
-

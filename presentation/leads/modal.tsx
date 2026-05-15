@@ -21,7 +21,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useCreateLeadMutation } from '@/hooks/use-create-lead';
 import { useSendLeadOtpMutation } from '@/hooks/use-send-lead-otp';
 import { useVerifyLeadOtpMutation } from '@/hooks/use-verify-lead-otp';
+import { useGenerateAadhaarOtpMutation } from '@/hooks/use-generate-aadhaar-otp';
+import { useAuthenticateAadhaarOtpMutation } from '@/hooks/use-authenticate-aadhaar-otp';
+import { useFetchAadhaarDetailsMutation } from '@/hooks/use-fetch-aadhaar-details';
+import { useValidatePanMutation } from '@/hooks/use-validate-pan';
 import { log } from '@/core/utils/logger';
+import { encryptAadhaarUid } from '@/core/ekyc/aadhaar-crypto';
+import { generateUidaiOtpAuthBlock } from '@/core/ekyc/uidai-pidblock';
+import {
+  extractLeadPrefillFromAadhaarAuthenticateResponse,
+  type AadhaarLeadPrefill,
+} from '@/core/ekyc/aadhaar-kyc';
 
 type Step = 1 | 2 | 3;
 
@@ -30,7 +40,7 @@ const CUSTOMER_TYPES = ['Individual', 'Non-individual'];
 const SUB_TYPES = ['Retail', 'Joint', 'NRI'];
 const INCOME_BANDS = ['Below 2L', '2-5L', '5-10L', '10-25L', '25L+'];
 const PRODUCT_TYPES = ['Savings', 'Current', 'Term Deposit', 'Recurring Deposit', 'Personal Loan', 'Mortgage Loan'];
-const DOCUMENT_TYPES = ['Aadhaar', 'PAN', 'Voter ID', 'Driving Licence', 'Passport'];
+const DOCUMENT_TYPES = ['Aadhaar', 'PAN'];
 const OTP_DIGITS = Array.from({ length: 6 }, (_, index) => index);
 
 const SCREEN_SCALE = Math.min(Math.max(Dimensions.get('window').width / 390, 0.9), 1.08);
@@ -132,6 +142,20 @@ export function NewLeadModalScreen() {
   const [documentNumber, setDocumentNumber] = useState('');
   const [identityOtpSent, setIdentityOtpSent] = useState(false);
   const [identityOtpDigits, setIdentityOtpDigits] = useState<string[]>(Array(6).fill(''));
+  const [aadhaarTxn, setAadhaarTxn] = useState<string | null>(null);
+  const [aadhaarOtpVerified, setAadhaarOtpVerified] = useState(false);
+  const [aadhaarAuth, setAadhaarAuth] = useState<{
+    skey?: { ci?: string; value?: string };
+    data?: { type?: string; value?: string };
+    hmac?: string;
+  } | null>(null);
+  const [aadhaarLeadPrefill, setAadhaarLeadPrefill] = useState<AadhaarLeadPrefill | null>(null);
+  const [aadhaarFlowLoading, setAadhaarFlowLoading] = useState(false);
+  const [panNumber, setPanNumber] = useState('');
+  const [panFullName, setPanFullName] = useState('');
+  const [panFatherName, setPanFatherName] = useState('');
+  const [panDob, setPanDob] = useState(''); // YYYY-MM-DD
+  const [panValidated, setPanValidated] = useState(false);
   const [productType, setProductType] = useState('Savings');
   const [productTypeOpen, setProductTypeOpen] = useState(false);
   const [productCode, setProductCode] = useState('P101 · LALIT');
@@ -150,6 +174,11 @@ export function NewLeadModalScreen() {
   const otpValue = otpDigits.join('');
   const identityOtpComplete = identityOtpDigits.every((digit) => digit.length === 1);
   const identityOtpValue = identityOtpDigits.join('');
+  const panFormComplete =
+    panNumber.trim().length === 10 &&
+    panFullName.trim().length > 0 &&
+    panFatherName.trim().length > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(panDob.trim());
 
   const otpSlotWidth = Math.max(34, Math.min(46, Math.floor((windowWidth - 100) / 6)));
 
@@ -158,9 +187,20 @@ export function NewLeadModalScreen() {
   const createLead = useCreateLeadMutation();
   const sendOtp = useSendLeadOtpMutation();
   const verifyOtp = useVerifyLeadOtpMutation();
+  const generateAadhaarOtp = useGenerateAadhaarOtpMutation();
+  const authenticateAadhaarOtp = useAuthenticateAadhaarOtpMutation();
+  const fetchAadhaarDetails = useFetchAadhaarDetailsMutation();
+  const validatePan = useValidatePanMutation();
 
   const isAnyApiPending =
-    sendOtp.isPending || verifyOtp.isPending || createLead.isPending;
+    sendOtp.isPending ||
+    verifyOtp.isPending ||
+    createLead.isPending ||
+    generateAadhaarOtp.isPending ||
+    authenticateAadhaarOtp.isPending ||
+    fetchAadhaarDetails.isPending ||
+    aadhaarFlowLoading ||
+    validatePan.isPending;
 
   const progressWidth = useMemo(() => {
     if (step === 1) return [1, 0, 0];
@@ -180,6 +220,56 @@ export function NewLeadModalScreen() {
     setStep((current) => Math.min(3, current + 1) as Step);
   };
 
+  const handleStep2PrimaryCta = async () => {
+    if (step !== 2) return;
+
+    if (documentType === 'PAN') {
+      if (!panValidated) {
+        if (!panFormComplete) {
+          Alert.alert('PAN validation', 'Enter PAN, Name, Father name and DOB (YYYY-MM-DD).');
+          return;
+        }
+
+        try {
+          const response = await validatePan.mutateAsync({
+            pan: panNumber.trim(),
+            name: panFullName.trim(),
+            fathername: panFatherName.trim(),
+            dob: panDob.trim(),
+          });
+
+          const statusCode = (response as any)?.status?.[0]?.statusCode ?? '';
+          const statusOk = !statusCode || statusCode === '000';
+          // Best-effort interpretation; backend response shape may vary.
+          const anyTrue =
+            (response as any)?.response?.outputData?.[0]?.status === true ||
+            (response as any)?.response?.outputData?.[0]?.isValid === true ||
+            (response as any)?.response?.outputData?.[0]?.panStatus === true ||
+            (response as any)?.response?.outputData?.[0]?.panStatus === 'true';
+
+          if (statusOk && anyTrue) {
+            setPanValidated(true);
+            return;
+          }
+
+          Alert.alert('PAN validation failed', (response as any)?.status?.[0]?.statusMessage ?? 'Please try again.');
+          setPanValidated(false);
+          return;
+        } catch (error) {
+          log.error('pan validation failed', error);
+          Alert.alert('PAN validation failed', 'Please try again.');
+          setPanValidated(false);
+          return;
+        }
+      }
+
+      onNext();
+      return;
+    }
+
+    onNext();
+  };
+
   const closeMenus = () => {
     setLeadSourceOpen(false);
     setIncomeBandOpen(false);
@@ -194,6 +284,26 @@ export function NewLeadModalScreen() {
     if (!otpVerified || !otpRequestId) {
       Alert.alert('OTP verification required', 'Verify the OTP before submitting.');
       return;
+    }
+
+    if (documentType === 'Aadhaar') {
+      if (!aadhaarOtpVerified) {
+        Alert.alert('Aadhaar verification required', 'Verify Aadhaar OTP before submitting.');
+        return;
+      }
+      // if (!aadhaarLeadPrefill?.permanentAddressStreet || !aadhaarLeadPrefill?.permanentAddressPostalCode) {
+      //   Alert.alert(
+      //     'Aadhaar details missing',
+      //     'Unable to read name/address from Aadhaar response. Please try verifying again.',
+      //   );
+      //   return;
+      // }
+    }
+    if (documentType === 'PAN') {
+      if (!panValidated) {
+        Alert.alert('PAN validation required', 'Validate PAN before submitting.');
+        return;
+      }
     }
 
     if (createLead.isPending) return;
@@ -226,6 +336,16 @@ export function NewLeadModalScreen() {
         leadSource: leadSource === 'Select source' ? 'Walk-in' : leadSource,
         interestedProduct,
         productCode: extractedCode,
+        ...(documentType === 'Aadhaar'
+          ? (aadhaarLeadPrefill ?? undefined)
+          : documentType === 'PAN'
+            ? {
+                firstName: panFullName.trim(),
+                panNumber: panNumber.trim(),
+                fatherName: panFatherName.trim(),
+                dob: panDob.trim(),
+              }
+            : undefined),
       },
       {
         onSuccess: () => {
@@ -237,6 +357,28 @@ export function NewLeadModalScreen() {
       },
     );
   };
+
+  const profileName = useMemo(() => {
+    if (documentType === 'PAN') {
+      const v = panFullName.trim();
+      return v || '—';
+    }
+    const first = aadhaarLeadPrefill?.firstName?.trim();
+    const last = aadhaarLeadPrefill?.lastName?.trim();
+    const full = [first, last].filter(Boolean).join(' ');
+    return full || '—';
+  }, [aadhaarLeadPrefill?.firstName, aadhaarLeadPrefill?.lastName, documentType, panFullName]);
+
+  const profileGender = useMemo(() => {
+    if (documentType === 'PAN') return '—';
+    const gender = aadhaarLeadPrefill?.gender?.trim();
+    if (!gender) return '—';
+    const g = gender.toUpperCase();
+    if (g === 'M') return 'Male';
+    if (g === 'F') return 'Female';
+    if (g === 'T') return 'Transgender';
+    return gender;
+  }, [aadhaarLeadPrefill?.gender, documentType]);
 
   const handleOtpChange = (value: string, index: number) => {
     const nextValue = value.replace(/\D/g, '').slice(0, 1);
@@ -306,6 +448,21 @@ export function NewLeadModalScreen() {
   useEffect(() => {
     if (!identityOtpSent) identityOtpScrollHandled.current = false;
   }, [identityOtpSent]);
+
+  useEffect(() => {
+    setDocumentNumber('');
+    setIdentityOtpSent(false);
+    setIdentityOtpDigits(Array(6).fill(''));
+    setAadhaarTxn(null);
+    setAadhaarOtpVerified(false);
+    setAadhaarAuth(null);
+    setAadhaarLeadPrefill(null);
+    setPanNumber('');
+    setPanFullName('');
+    setPanFatherName('');
+    setPanDob('');
+    setPanValidated(false);
+  }, [documentType]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -744,12 +901,17 @@ export function NewLeadModalScreen() {
                       </View>
                     ) : null}
                   </View>
-
-                  <Text style={[styles.fieldLabel, styles.sectionGap]}>Document number</Text>
+                  {documentType === 'Aadhaar' ? (
+                    <View>
+                    <Text style={[styles.fieldLabel, styles.sectionGap]}>Document number</Text>
                   <View style={styles.inlineRow}>
                     <TextInput
                       value={documentNumber}
-                      onChangeText={setDocumentNumber}
+                      onChangeText={(value) => {
+                        setDocumentNumber(value);
+                        setAadhaarTxn(null);
+                        setAadhaarOtpVerified(false);
+                      }}
                       placeholder="XXXX XXXX XXXX"
                       placeholderTextColor="#7B869B"
                       style={[styles.textField, styles.documentField]}
@@ -764,17 +926,174 @@ export function NewLeadModalScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.iconButton, styles.primaryIconButton]}
-                      onPress={() => {
-                        setIdentityOtpSent(true);
-                        setIdentityOtpDigits(Array(6).fill(''));
+                      onPress={async () => {
+                        const aadhaar = documentNumber.replace(/\D/g, '');
+                        if (documentType !== 'Aadhaar') {
+                          setIdentityOtpSent(true);
+                          setIdentityOtpDigits(Array(6).fill(''));
+                          return;
+                        }
+
+                        if (aadhaar.length !== 12) {
+                          Alert.alert('Invalid Aadhaar', 'Enter a valid 12-digit Aadhaar number.');
+                          return;
+                        }
+
+                        let encryptedUid = '';
+                        try {
+                          encryptedUid = await encryptAadhaarUid(aadhaar);
+                        } catch (error) {
+                          log.error('aadhaar uid encryption failed', error);
+                          const message =
+                            error instanceof Error
+                              ? error.message
+                              : 'Please check the encryption configuration.';
+                          Alert.alert('Encryption failed', message);
+                          return;
+                        }
+
+                        generateAadhaarOtp.mutate(
+                          { encryptedUid },
+                          {
+                            onSuccess: (data) => {
+                              const statusCode = data?.status?.[0]?.statusCode ?? '';
+                              const txn = data?.response?.otpResponse?.txn ?? null;
+                              const ret = data?.response?.otpResponse?.ret ?? '';
+                              const authLike =
+                                (data as any)?.response?.auth ??
+                                (data as any)?.response?.authenticate ??
+                                (data as any)?.response?.authRequest ??
+                                (data as any)?.response?.authData ??
+                                null;
+                              const skey =
+                                authLike?.skey ??
+                                (data as any)?.response?.skey ??
+                                null;
+                              const authData =
+                                authLike?.data ??
+                                (data as any)?.response?.data ??
+                                null;
+                              const hmac =
+                                authLike?.hmac ??
+                                (data as any)?.response?.hmac ??
+                                null;
+
+                              if (statusCode && statusCode !== '000') {
+                                Alert.alert(
+                                  'OTP request failed',
+                                  data?.status?.[0]?.statusMessage ?? 'Please try again.',
+                                );
+                                return;
+                              }
+
+                              if (ret && ret.toLowerCase() !== 'y') {
+                                Alert.alert('OTP request failed', 'Please try again.');
+                                return;
+                              }
+
+                              if (!txn) {
+                                Alert.alert('OTP request failed', 'Missing transaction id.');
+                                return;
+                              }
+
+                              setAadhaarTxn(txn);
+                              setAadhaarAuth(
+                                skey || authData || hmac
+                                  ? {
+                                      skey:
+                                        skey && (skey.ci || skey.value)
+                                          ? { ci: skey.ci, value: skey.value }
+                                          : undefined,
+                                      data:
+                                        authData && (authData.type || authData.value)
+                                          ? { type: authData.type, value: authData.value }
+                                          : undefined,
+                                      hmac: typeof hmac === 'string' ? hmac : undefined,
+                                    }
+                                  : null,
+                              );
+                              setIdentityOtpSent(true);
+                              setIdentityOtpDigits(Array(6).fill(''));
+                              setAadhaarOtpVerified(false);
+                            },
+                            onError: () => {
+                              Alert.alert('OTP request failed', 'Please try again.');
+                            },
+                          },
+                        );
                       }}>
                       <Ionicons name="search" size={S(22)} color="#FFFFFF" />
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.helperText}>12 digits · OTP-based e-KYC via UIDAI</Text>
+                  <Text style={styles.helperText}>
+                    {documentType === 'Aadhaar'
+                      ? '12 digits · OTP-based e-KYC via UIDAI'
+                      : 'PAN validation requires PAN + Name + Father name + DOB'}
+                  </Text>
+                  </View>
+                  ):null 
+                  }
 
-                  {identityOtpSent ? (
+                  {documentType === 'PAN' ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.fieldLabel}>PAN number</Text>
+                      <TextInput
+                        value={panNumber}
+                        onChangeText={(v) => {
+                          setPanNumber(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10));
+                          setPanValidated(false);
+                        }}
+                        placeholder="CTDPK4297F"
+                        placeholderTextColor="#7B869B"
+                        autoCapitalize="characters"
+                        style={[styles.textField, { marginTop: 6 }]}
+                      />
+
+                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Name</Text>
+                      <TextInput
+                        value={panFullName}
+                        onChangeText={(v) => {
+                          setPanFullName(v);
+                          setPanValidated(false);
+                        }}
+                        placeholder="Rahul Kumar"
+                        placeholderTextColor="#7B869B"
+                        style={[styles.textField, { marginTop: 6 }]}
+                      />
+
+                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Father name</Text>
+                      <TextInput
+                        value={panFatherName}
+                        onChangeText={(v) => {
+                          setPanFatherName(v);
+                          setPanValidated(false);
+                        }}
+                        placeholder="Hari Kumar"
+                        placeholderTextColor="#7B869B"
+                        style={[styles.textField, { marginTop: 6 }]}
+                      />
+
+                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>DOB (YYYY-MM-DD)</Text>
+                      <TextInput
+                        value={panDob}
+                        onChangeText={(v) => {
+                          setPanDob(v.replace(/[^\d-]/g, '').slice(0, 10));
+                          setPanValidated(false);
+                        }}
+                        placeholder="1987-01-31"
+                        placeholderTextColor="#7B869B"
+                        keyboardType="numbers-and-punctuation"
+                        style={[styles.textField, { marginTop: 6 }]}
+                      />
+
+                      {panValidated ? (
+                        <Text style={[styles.successLine, { marginTop: 10 }]}>✓ PAN validated</Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {documentType === 'Aadhaar' && identityOtpSent ? (
                     <View
                       style={styles.otpCardInner}
                       onLayout={(event) => {
@@ -807,8 +1126,133 @@ export function NewLeadModalScreen() {
                         ))}
                       </View>
                       <Text style={styles.otpHelpText}>
-                        Enter any 6-digit OTP to continue. Current value: {identityOtpValue || '------'}
+                        Enter the 6-digit OTP. Current value: {identityOtpValue || '------'}
                       </Text>
+
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        disabled={
+                          documentType === 'Aadhaar'
+                            ? !identityOtpComplete ||
+                              !aadhaarTxn ||
+                              authenticateAadhaarOtp.isPending ||
+                              aadhaarOtpVerified
+                            : !identityOtpComplete
+                        }
+                        onPress={async () => {
+                          if (documentType !== 'Aadhaar') return;
+                          const aadhaar = documentNumber.replace(/\D/g, '');
+                          if (!aadhaarTxn) return;
+                          if (aadhaar.length !== 12) {
+                            Alert.alert('Invalid Aadhaar', 'Enter a valid 12-digit Aadhaar number.');
+                            return;
+                          }
+
+                          let encryptedUid = '';
+                          try {
+                            encryptedUid = await encryptAadhaarUid(aadhaar);
+                          } catch (error) {
+                            log.error('aadhaar uid encryption failed', error);
+                            const message =
+                              error instanceof Error
+                                ? error.message
+                                : 'Please check the encryption configuration.';
+                            Alert.alert('Encryption failed', message);
+                            return;
+                          }
+
+                          let authBlock:
+                            | {
+                                skey: { ci: string; value: string };
+                                data: { type: string; value: string };
+                                hmac: string;
+                              }
+                            | null = null;
+                          try {
+                            authBlock = await generateUidaiOtpAuthBlock({
+                              otp: identityOtpValue,
+                            });
+                          } catch (error) {
+                            log.error('uidai pidblock generation failed', error);
+                            const hasFallback =
+                              !!aadhaarAuth?.skey?.ci &&
+                              !!aadhaarAuth?.skey?.value &&
+                              !!aadhaarAuth?.data?.type &&
+                              !!aadhaarAuth?.data?.value &&
+                              !!aadhaarAuth?.hmac;
+                            if (hasFallback) {
+                              authBlock = aadhaarAuth as unknown as {
+                                skey: { ci: string; value: string };
+                                data: { type: string; value: string };
+                                hmac: string;
+                              };
+                            } else {
+                              Alert.alert('Aadhaar verification failed', 'Unable to generate UIDAI auth parameters.');
+                              return;
+                            }
+                          }
+
+                          setAadhaarFlowLoading(true);
+                          try {
+                            const authResponse = await authenticateAadhaarOtp.mutateAsync({
+                              encryptedUid,
+                              txn: aadhaarTxn,
+                              auth: authBlock ?? undefined,
+                            });
+
+                            const statusCode = authResponse?.status?.[0]?.statusCode ?? '';
+                            if (statusCode !== '000') {
+                              throw new Error(
+                                authResponse?.status?.[0]?.statusMessage ?? 'Aadhaar verification failed',
+                              );
+                            }
+
+                            const detailsResponse = await fetchAadhaarDetails.mutateAsync({
+                              encryptedUid,
+                              txn: aadhaarTxn,
+                              auth: authBlock as {
+                                skey: { ci: string; value: string };
+                                data: { type: string; value: string };
+                                hmac: string;
+                              },
+                            });
+
+                            const prefill =
+                              extractLeadPrefillFromAadhaarAuthenticateResponse(detailsResponse);
+                            setAadhaarLeadPrefill(prefill);
+                            setAadhaarOtpVerified(true);
+                          } catch (error) {
+                            log.error('[AADHAAR] full flow failed', error);
+                            const message =
+                              error instanceof Error ? error.message : 'Aadhaar verification failed';
+                            Alert.alert('Aadhaar verification failed', message);
+                            setAadhaarOtpVerified(false);
+                          } finally {
+                            setAadhaarFlowLoading(false);
+                          }
+                        }}
+                        style={{
+                          marginTop: 10,
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          backgroundColor:
+                            identityOtpComplete &&
+                            documentType === 'Aadhaar' &&
+                            aadhaarTxn &&
+                            !aadhaarOtpVerified
+                              ? '#1D4ED8'
+                              : '#D8DDE8',
+                          borderRadius: 12,
+                          alignItems: 'center',
+                        }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>
+                          {aadhaarOtpVerified
+                            ? 'Verified'
+                            : authenticateAadhaarOtp.isPending
+                              ? 'Verifying…'
+                              : 'Verify OTP'}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   ) : null}
                 </View>
@@ -871,9 +1315,11 @@ export function NewLeadModalScreen() {
               <View style={styles.stack}>
                 <View style={styles.profilePillRow}>
                   <Text style={styles.profileLabel}>PROFILE</Text>
-                  <Text style={styles.profilePillActive}>Anjali R Suresh</Text>
-                  <Text style={styles.profilePill}>Female</Text>
-                  <Text style={styles.profilePill}>₹Below 2L</Text>
+                  <Text style={styles.profilePillActive}>{profileName}</Text>
+                  <Text style={styles.profilePill}>{profileGender}</Text>
+                  <Text style={styles.profilePill}>
+                    {incomeBand === 'Select band' ? '—' : `₹${incomeBand}`}
+                  </Text>
                 </View>
 
                 <View style={styles.card}>
@@ -1047,15 +1493,38 @@ export function NewLeadModalScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  disabled={!identityOtpComplete || !otpVerified || verifyOtp.isPending}
+                  disabled={
+                    !otpVerified ||
+                    verifyOtp.isPending ||
+                    (documentType === 'Aadhaar'
+                      ? !identityOtpComplete || !aadhaarOtpVerified
+                      : documentType === 'PAN'
+                        ? !panFormComplete
+                        : false)
+                  }
                   style={[
                     styles.footerButton,
                     styles.primaryButton,
-                    (!identityOtpComplete || !otpVerified || verifyOtp.isPending) && styles.primaryButtonDisabled,
+                    (!otpVerified ||
+                      verifyOtp.isPending ||
+                      (documentType === 'Aadhaar'
+                        ? !identityOtpComplete || !aadhaarOtpVerified
+                        : documentType === 'PAN'
+                          ? !panFormComplete
+                          : false)) &&
+                      styles.primaryButtonDisabled,
                   ]}
-                  onPress={onNext}>
+                  onPress={documentType === 'PAN' ? handleStep2PrimaryCta : onNext}>
                   <Text style={styles.primaryButtonText}>
-                    {otpVerified ? 'Next' : 'Verify OTP'}
+                    {documentType === 'PAN'
+                      ? panValidated
+                        ? 'Next'
+                        : validatePan.isPending
+                          ? 'Validating…'
+                          : 'Validate PAN'
+                      : otpVerified
+                        ? 'Next'
+                        : 'Verify OTP'}
                   </Text>
                 </TouchableOpacity>
               </>

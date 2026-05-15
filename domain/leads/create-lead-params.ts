@@ -7,5 +7,15 @@ export type CreateLeadParams = {
   firstName?: string;
   lastName?: string;
   emailAddress?: string;
-};
+  panNumber?: string;
+  fatherName?: string;
+  dob?: string; // YYYY-MM-DD
 
+  // Permanent address (Aadhaar e-KYC)
+  permanentAddressStreet?: string;
+  permanentAddressPostalCode?: string;
+
+  // Communication address (Aadhaar e-KYC)
+  communicationAddressStreet?: string;
+  communicationAddressPostalCode?: string;
+};
