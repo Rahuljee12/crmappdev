@@ -8,15 +8,15 @@ export class CustomerApiRepository implements CustomerRepository {
   constructor(private readonly ds: EsafCustomerDatasource) {}
 
   async findCustomerByMobile(mobile: string): Promise<CustomerSearchResult[]> {
-    const profileId = process.env.EXPO_PUBLIC_ESAF_PROFILE_ID ?? '1';
-    const sourceSystem = process.env.EXPO_PUBLIC_ESAF_SOURCE_SYSTEM ?? 'PRIME';
-    const customerType = process.env.EXPO_PUBLIC_ESAF_CUSTOMER_TYPE ?? 'I';
+    const profileId = '1';
+    const sourceSystem = 'PRIME';
+    const customerType = 'I';
+    const clientRequestId = `${Math.floor(100000000 + Math.random() * 900000000)}`;
 
     const dto = await this.ds.findCustomer({
       request: {
         profileId,
-        clientRequestId: `${Date.now()}`,
-        name: '',
+        clientRequestId,
         phone1: mobile,
         sourceSystem,
         customerType,

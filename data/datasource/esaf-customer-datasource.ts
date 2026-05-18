@@ -11,14 +11,14 @@ import type {
 export class EsafCustomerDatasource {
   async findCustomer(dto: EsafFindCustomerRequestDto) {
     const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/aoco/find-customer/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/find-customer/1.0`;
 
     return httpJson<EsafFindCustomerResponseDto>(url, {
       method: 'POST',
       headers: buildEsafHeaders({
         bearerToken: token,
         channel: 'API',
-        externalReferencePrefix: 'AB12CD34',
+        externalReferenceNumber: 'AB12CD34-12340890067234567-122999',
       }),
       body: JSON.stringify(dto),
     });

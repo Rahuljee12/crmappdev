@@ -68,6 +68,13 @@ export async function httpJson<T>(
       ok: res.ok,
       bodyText: text,
     });
+    console.log('[httpJson] raw response', {
+      url,
+      method: init?.method,
+      status: res.status,
+      ok: res.ok,
+      bodyText: text,
+    });
 
     if (!res.ok) {
       throw {

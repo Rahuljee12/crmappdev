@@ -18,12 +18,10 @@ import { globalStyles } from '@/theme/globalStyles';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFindCustomerMutation } from '@/hooks/use-find-customer';
-import type { CustomerSearchResult } from '@/domain/customers/customer-search-result';
 
 type SearchState =
   | 'idle'
   | 'searching'
-  | 'results'
   | 'empty';
 
 function digitsOnly(value: string) {
@@ -35,8 +33,6 @@ export default function CustomersScreen() {
   const findCustomer = useFindCustomerMutation();
 
   const [mobile, setMobile] = useState('');
-  const [customerResults, setCustomerResults] =
-    useState<CustomerSearchResult[]>([]);
 
   const [searchState, setSearchState] =
     useState<SearchState>('idle');
@@ -50,7 +46,6 @@ export default function CustomersScreen() {
     useCallback(() => {
       return () => {
         setMobile('');
-        setCustomerResults([]);
         setSearchState('idle');
       };
     }, [])
@@ -64,25 +59,59 @@ export default function CustomersScreen() {
     }
 
     setSearchState('searching');
-    setCustomerResults([]);
     findCustomer.reset();
 
     findCustomer.mutate(formattedMobile, {
       onSuccess: (customers) => {
-        setCustomerResults(customers);
-        setSearchState(customers.length > 0 ? 'results' : 'empty');
+        const etbCustomer =
+          customers.find(
+            (customer) =>
+              Number(customer.matchCount) > 0 &&
+              customer.recordType !== 'INPUT'
+          ) ??
+          customers.find((customer) => Number(customer.matchCount) > 0);
+
+        if (etbCustomer) {
+          router.push({
+            pathname: '/customer-details',
+            params: {
+              name: etbCustomer.name,
+              phone1: etbCustomer.phone1,
+              customerId: etbCustomer.customerId,
+              ucic: etbCustomer.ucic,
+              recordType: etbCustomer.recordType,
+              matchType: etbCustomer.matchType,
+              matchCount: etbCustomer.matchCount,
+              sourceSystem: etbCustomer.sourceSystem,
+            },
+          });
+          return;
+        }
+
+        const newCustomer = customers.find((customer) => Number(customer.matchCount) <= 0);
+
+        if (!etbCustomer) {
+          if (newCustomer) {
+            router.replace({
+              pathname: '/new-customer',
+              params: {
+                mobile: formattedMobile,
+              },
+            });
+            return;
+          }
+
+          setSearchState('empty');
+          return;
+        }
       },
       onError: () => {
-        setCustomerResults([]);
         setSearchState('empty');
       },
     });
   };
 
-  const hasSearchResults = customerResults.length > 0;
-
-  const showBottomActions =
-    searchState === 'results' || searchState === 'empty';
+  const showBottomActions = searchState === 'empty';
 
   return (
     <SafeAreaView
@@ -153,79 +182,20 @@ export default function CustomersScreen() {
             </TouchableOpacity>
           </View>
 
-          {searchState !== 'idle' ? (
-            <View style={styles.resultsSection}>
-              {searchState === 'searching' ? (
-                <View style={styles.statusCard}>
-                  <ActivityIndicator size="small" color="#1D4ED8" />
-                  <Text style={styles.statusText}>Searching customer...</Text>
-                </View>
-              ) : null}
+          {searchState === 'searching' ? (
+            <View style={styles.statusCard}>
+              <ActivityIndicator size="small" color="#1D4ED8" />
+              <Text style={styles.statusText}>Searching customer...</Text>
+            </View>
+          ) : null}
 
-              {searchState === 'empty' ? (
-                <View style={styles.emptyCard}>
-                  <Ionicons name="person-outline" size={26} color="#B45309" />
-                  <Text style={styles.emptyTitle}>No customer found</Text>
-                  <Text style={styles.emptySubtitle}>
-                    We could not find any matching customer for {formattedMobile}.
-                  </Text>
-                </View>
-              ) : null}
-
-              {searchState === 'results' && hasSearchResults ? (
-                <View style={styles.resultsStack}>
-                  {customerResults.map((customer) => (
-                    <View key={`${customer.customerId}-${customer.phone1}-${customer.recordType}`} style={styles.resultCard}>
-                      <View style={styles.resultHeader}>
-                        <View style={styles.resultAvatar}>
-                          <Text style={styles.resultAvatarText}>
-                            {customer.name
-                              .split(' ')
-                              .filter(Boolean)
-                              .slice(0, 2)
-                              .map((part) => part[0]?.toUpperCase() ?? '')
-                              .join('')}
-                          </Text>
-                        </View>
-
-                        <View style={styles.resultHeaderBody}>
-                          <Text style={styles.resultName}>{customer.name}</Text>
-                          <Text style={styles.resultSubtitle}>{customer.subtitle}</Text>
-                        </View>
-
-                        <View style={styles.resultPill}>
-                          <Text style={styles.resultPillText}>{customer.recordType}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.resultMetaRow}>
-                        <Text style={styles.resultMetaLabel}>Mobile</Text>
-                        <Text style={styles.resultMetaValue}>{customer.phone1}</Text>
-                      </View>
-
-                      <View style={styles.resultMetaRow}>
-                        <Text style={styles.resultMetaLabel}>UCIC / ID</Text>
-                        <Text style={styles.resultMetaValue}>{customer.ucic !== '—' ? customer.ucic : customer.customerId}</Text>
-                      </View>
-
-                      <View style={styles.resultMetaRow}>
-                        <Text style={styles.resultMetaLabel}>Match</Text>
-                        <Text style={styles.resultMetaValue}>{customer.matchType}</Text>
-                      </View>
-
-                      {customer.details.length > 0 ? (
-                        <View style={styles.resultDetails}>
-                          {customer.details.map((item) => (
-                            <Text key={item} style={styles.resultDetailText}>
-                              {item}
-                            </Text>
-                          ))}
-                        </View>
-                      ) : null}
-                    </View>
-                  ))}
-                </View>
-              ) : null}
+          {searchState === 'empty' ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="person-outline" size={26} color="#B45309" />
+              <Text style={styles.emptyTitle}>No customer found</Text>
+              <Text style={styles.emptySubtitle}>
+                We could not find any matching customer for {formattedMobile}.
+              </Text>
             </View>
           ) : null}
         </ScrollView>
@@ -239,37 +209,19 @@ export default function CustomersScreen() {
                 paddingBottom: insets.bottom + 12,
               },
             ]}>
-            {hasSearchResults ? (
-              <>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => router.push('/modal')}>
-                  <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>Create New Lead</Text>
-                </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push('/modal')}>
+              <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Create New Lead</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity style={styles.secondaryButton}>
-                  <Ionicons name="document-text-outline" size={18} color="#111827" />
-                  <Text style={styles.secondaryButtonText}>Raise Service Request</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => router.push('/modal')}>
-                  <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryButtonText}>Create New Lead</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => router.push('/modal')}>
-                  <Ionicons name="document-text-outline" size={18} color="#111827" />
-                  <Text style={styles.secondaryButtonText}>Create Lead</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => router.push('/modal')}>
+              <Ionicons name="document-text-outline" size={18} color="#111827" />
+              <Text style={styles.secondaryButtonText}>Raise Service Request</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -568,6 +520,46 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: '#6B7280',
+  },
+
+  statusCard: {
+    minHeight: 60,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  statusText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+
+  emptyCard: {
+    minHeight: 96,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    padding: 16,
+    justifyContent: 'center',
+    gap: 4,
+  },
+
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#B45309',
   },
 
   actionsShell: {

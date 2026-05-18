@@ -13,11 +13,15 @@ export function buildExternalReferenceNumber(prefix: string) {
 
 export function buildEsafHeaders(params: {
   channel?: string;
+  externalReferenceNumber?: string;
   externalReferencePrefix?: string;
   bearerToken?: string;
 }) {
   const channel = params.channel ?? ESAF_DEFAULT_CHANNEL;
-  const externalReferenceNumber = params.externalReferencePrefix ?? 'API-12309946299324567-122880';
+  const externalReferenceNumber =
+    params.externalReferenceNumber ??
+    params.externalReferencePrefix ??
+    'API-12309946299324567-122880';
 
   const headers: Record<string, string> = {
     channel,
@@ -32,4 +36,3 @@ export function buildEsafHeaders(params: {
 
   return headers;
 }
-
