@@ -91,6 +91,13 @@ function AppContent() {
             headerShown: false,
           }}
         />
+
+        <Stack.Screen
+          name="new-customer"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
 
       <StatusBar style="dark" />

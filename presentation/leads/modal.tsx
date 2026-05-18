@@ -113,7 +113,10 @@ const PRODUCT_CODES: ProductCode[] = [
 ];
 
 export function NewLeadModalScreen() {
-  const params = useLocalSearchParams<{ mobile?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    mobile?: string | string[];
+    product?: string | string[];
+  }>();
   const { width: windowWidth } = useWindowDimensions();
   const initialMobile =
     typeof params.mobile === 'string'
@@ -168,6 +171,12 @@ export function NewLeadModalScreen() {
   const identityOtpCardY = useRef(0);
   const otpScrollHandled = useRef(false);
   const identityOtpScrollHandled = useRef(false);
+
+  useEffect(() => {
+    if (initialMobile) {
+      setMobile(initialMobile);
+    }
+  }, [initialMobile]);
 
   const canSendOtp = consents.every(Boolean) && mobile.trim().length === 10;
   const otpComplete = otpDigits.every((digit) => digit.length === 1);

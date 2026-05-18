@@ -28,6 +28,24 @@ function mapCustomerMatch(match: EsafCustomerMatchDto): CustomerSearchResult | n
   const phone1 = trimText(match.phone1);
   const customerId = trimText(match.customerId);
   const ucic = trimText(match.ucic);
+  const matchCount = trimText(match.matchCount);
+
+  if (Number(matchCount) <= 0) {
+    return {
+      name: 'New Customer',
+      phone1: phone1 || '—',
+      customerId: customerId || '—',
+      ucic: ucic || '—',
+      recordType: trimText(match.recordType) || 'NEW',
+      customerType: trimText(match.customerType) || '—',
+      matchType: trimText(match.matchType) || '—',
+      statusMessage: trimText(match.statusMessage) || 'E',
+      sourceSystem: trimText(match.sourceSystem) || '—',
+      matchCount,
+      subtitle: 'No existing customer or lead found',
+      details: [],
+    };
+  }
 
   if (!name && !phone1 && !customerId && !ucic) {
     return null;
@@ -52,7 +70,7 @@ function mapCustomerMatch(match: EsafCustomerMatchDto): CustomerSearchResult | n
     matchType: trimText(match.matchType) || '—',
     statusMessage: trimText(match.statusMessage) || '—',
     sourceSystem: trimText(match.sourceSystem) || '—',
-    matchCount: trimText(match.matchCount) || '—',
+    matchCount: matchCount || '—',
     subtitle: formatSubtitle(match),
     details,
   };
@@ -61,13 +79,18 @@ function mapCustomerMatch(match: EsafCustomerMatchDto): CustomerSearchResult | n
 export function mapEsafCustomerToDomain(
   dto: EsafFindCustomerResponseDto,
 ): CustomerSearchResult[] {
+  const matches = dto.response?.customerMatches ?? [];
+  const mappedMatches = matches
+    .map(mapCustomerMatch)
+    .filter((match): match is CustomerSearchResult => Boolean(match));
+
+  if (mappedMatches.length > 0) {
+    return mappedMatches;
+  }
+
   if (isNoCustomerResponse(dto)) {
     return [];
   }
 
-  const matches = dto.response?.customerMatches ?? [];
-  return matches
-    .filter((match) => trimText(match.recordType) !== 'INPUT')
-    .map(mapCustomerMatch)
-    .filter((match): match is CustomerSearchResult => Boolean(match));
+  return mappedMatches;
 }
