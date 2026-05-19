@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,10 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { leadUseCases } from '@/application/di/app-dependencies';
+import type { Lead } from '@/domain/leads/lead';
 import { globalStyles } from '@/theme/globalStyles';
+import { Fonts } from '@/theme/theme';
 
 type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
 
@@ -45,6 +49,15 @@ function initialsFromName(name: string) {
     .join('');
 }
 
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function leadMatchesMobile(lead: Lead, mobileNumber: string) {
+  const leadMobile = digitsOnly(lead.mobile);
+  return Boolean(leadMobile) && leadMobile.endsWith(mobileNumber);
+}
+
 export default function CustomerDetailsScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{
@@ -59,6 +72,9 @@ export default function CustomerDetailsScreen() {
   }>();
 
   const [activeTab, setActiveTab] = useState<CustomerTab>('Accounts');
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsLoaded, setLeadsLoaded] = useState(false);
 
   const customerName = firstParam(params.name) || 'Customer';
   const customerPhone = firstParam(params.phone1) || '—';
@@ -68,20 +84,6 @@ export default function CustomerDetailsScreen() {
     '—';
 
   const tabContent = useMemo<CardItem[]>(() => {
-    if (activeTab === 'Leads') {
-      return [
-        {
-          icon: 'home-outline' as const,
-          iconBackground: '#FFE4E1',
-          iconColor: '#FF5A1F',
-          title: 'Home Loan',
-          subtitle: 'Lead L-9821',
-          badge: 'Interested',
-          badgeVariant: 'amber',
-        },
-      ];
-    }
-
     if (activeTab === 'Insights') {
       return [
         {
@@ -121,7 +123,50 @@ export default function CustomerDetailsScreen() {
     ];
   }, [activeTab]);
 
-  const contentBottomSpacing = insets.bottom + 210;
+  useEffect(() => {
+    if (activeTab !== 'Leads' || leadsLoaded) {
+      return;
+    }
+
+    const mobileNumber = digitsOnly(customerPhone);
+    if (!mobileNumber) {
+      setLeadsLoaded(true);
+      return;
+    }
+
+    let cancelled = false;
+    setLeadsLoading(true);
+    setLeads([]);
+
+    leadUseCases.listLeads.execute({ mobileNumber: `91${mobileNumber}` })
+      .then((items) => {
+        if (!cancelled) {
+          setLeads(
+            items
+              .filter((lead) => leadMatchesMobile(lead, mobileNumber))
+              .slice(0, 2)
+          );
+          setLeadsLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLeads([]);
+          setLeadsLoaded(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLeadsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, customerPhone, leadsLoaded]);
+
+  const contentBottomSpacing = insets.bottom + 320;
 
   return (
     <SafeAreaView style={globalStyles.safeArea} edges={['top', 'left', 'right']}>
@@ -187,53 +232,89 @@ export default function CustomerDetailsScreen() {
             })}
           </View>
 
-          <View style={styles.cardStack}>
-            {tabContent.map((item) => (
-              <View key={item.title} style={styles.dataCard}>
-                <View
-                  style={[
-                    styles.iconWrap,
-                    { backgroundColor: item.iconBackground },
-                  ]}>
-                  <Ionicons name={item.icon} size={24} color={item.iconColor} />
+          {activeTab === 'Leads' ? (
+            <View style={styles.cardStack}>
+              {leadsLoading ? (
+                <View style={styles.emptyLeadsCard}>
+                  <ActivityIndicator size="small" color="#17307F" />
+                  <Text style={styles.emptyLeadsText}>Loading leads...</Text>
                 </View>
+              ) : null}
 
-                <View style={styles.cardBody}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  {item.subtitle ? (
-                    <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                  ) : null}
+              {!leadsLoading && leads.length === 0 ? (
+                <View style={styles.emptyLeadsCard}>
+                  <Text style={styles.emptyLeadsText}>No leads found</Text>
                 </View>
+              ) : null}
 
-                {item.badge ? (
-                  <View
-                    style={[
-                      styles.badge,
-                      item.badgeVariant === 'amber'
-                        ? styles.badgeAmber
-                        : styles.badgeGreen,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.badgeText,
-                        item.badgeVariant === 'amber'
-                          ? styles.badgeTextAmber
-                          : styles.badgeTextGreen,
-                      ]}>
-                      {item.badge}
+              {!leadsLoading ? leads.map((lead) => (
+                <View key={lead.id} style={styles.dataCard}>
+                  <View style={[styles.iconWrap, { backgroundColor: '#FFE4E1' }]}>
+                    <Ionicons name="home-outline" size={24} color="#FF5A1F" />
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{lead.product}</Text>
+                    <Text style={styles.cardSubtitle}>Lead {lead.id}</Text>
+                  </View>
+
+                  <View style={[styles.badge, styles.badgeAmber]}>
+                    <Text style={[styles.badgeText, styles.badgeTextAmber]}>
+                      {lead.status}
                     </Text>
                   </View>
-                ) : null}
-              </View>
-            ))}
-          </View>
+                </View>
+              )) : null}
+            </View>
+          ) : (
+            <View style={styles.cardStack}>
+              {tabContent.map((item) => (
+                <View key={item.title} style={styles.dataCard}>
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      { backgroundColor: item.iconBackground },
+                    ]}>
+                    <Ionicons name={item.icon} size={24} color={item.iconColor} />
+                  </View>
+
+                  <View style={styles.cardBody}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    {item.subtitle ? (
+                      <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                    ) : null}
+                  </View>
+
+                  {item.badge ? (
+                    <View
+                      style={[
+                        styles.badge,
+                        item.badgeVariant === 'amber'
+                          ? styles.badgeAmber
+                          : styles.badgeGreen,
+                      ]}>
+                      <Text
+                        style={[
+                          styles.badgeText,
+                          item.badgeVariant === 'amber'
+                            ? styles.badgeTextAmber
+                            : styles.badgeTextGreen,
+                        ]}>
+                        {item.badge}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          )}
         </ScrollView>
 
         <View
           style={[
             styles.actionsShell,
             {
-              paddingBottom: insets.bottom + 12,
+              bottom: insets.bottom + 102,
             },
           ]}>
           <TouchableOpacity
@@ -249,6 +330,54 @@ export default function CustomerDetailsScreen() {
             <Ionicons name="document-text-outline" size={18} color="#111827" />
             <Text style={styles.secondaryButtonText}>Raise Service Request</Text>
           </TouchableOpacity>
+        </View>
+
+        <View
+          style={[
+            styles.bottomTabBar,
+            {
+              paddingBottom: insets.bottom + 8,
+            },
+          ]}>
+          {[
+            { key: 'dashboard', label: 'Dashboard', icon: 'grid-outline', activeIcon: 'grid' },
+            { key: 'customers', label: 'Customers', icon: 'people-outline', activeIcon: 'people', active: true },
+            { key: 'leads', label: 'Leads', icon: 'radio-button-on-outline', activeIcon: 'radio-button-on' },
+            { key: 'accounts', label: 'Accounts', icon: 'wallet-outline', activeIcon: 'wallet-outline' },
+            { key: 'sr', label: 'SR', icon: 'headset-outline', activeIcon: 'headset-outline' },
+            { key: 'more', label: 'More', icon: 'ellipsis-horizontal', activeIcon: 'ellipsis-horizontal' },
+          ].map((item) => {
+            const active = item.active ?? false;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                activeOpacity={0.85}
+                onPress={() => {
+                  if (item.key === 'customers') {
+                    return;
+                  }
+
+                  if (item.key === 'leads') {
+                    router.replace('/');
+                    return;
+                  }
+
+                  router.replace(`/(tabs)/${item.key}` as never);
+                }}
+                style={styles.bottomTabItem}>
+                <View style={[styles.bottomTabIconWrap, active && styles.bottomTabIconWrapActive]}>
+                  <Ionicons
+                    name={(active ? item.activeIcon : item.icon) as any}
+                    size={24}
+                    color={active ? '#FFFFFF' : '#667085'}
+                  />
+                </View>
+                <Text style={[styles.bottomTabLabel, active && styles.bottomTabLabelActive]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     </SafeAreaView>
@@ -394,6 +523,25 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
+  emptyLeadsCard: {
+    minHeight: 92,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(15, 23, 42, 0.08)',
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  emptyLeadsText: {
+    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
   dataCard: {
     minHeight: 92,
     backgroundColor: '#FFFFFF',
@@ -467,7 +615,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
@@ -508,5 +655,52 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 16,
     fontWeight: '800',
+  },
+
+  bottomTabBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-start',
+  },
+
+  bottomTabItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1,
+  },
+
+  bottomTabIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  bottomTabIconWrapActive: {
+    width: 72,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#17307F',
+  },
+
+  bottomTabLabel: {
+    fontFamily: Fonts.sans,
+    fontSize: 11,
+    color: '#667085',
+    fontWeight: '700',
+  },
+
+  bottomTabLabelActive: {
+    color: '#17307F',
   },
 });

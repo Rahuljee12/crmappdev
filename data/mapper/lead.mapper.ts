@@ -40,6 +40,8 @@ export function mapEsafLeadsToDomain(dto: EsafFetchLeadsResponseDto): Lead[] {
 
     name: safeName(l.firstName, l.lastName),
 
+    mobile: l.mobile ?? '—',
+
     product: productLabel(
       productType,
       l.productCode,
