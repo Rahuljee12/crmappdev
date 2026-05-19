@@ -18,6 +18,8 @@ import { globalStyles } from '@/theme/globalStyles';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFindCustomerMutation } from '@/hooks/use-find-customer';
+import { leadUseCases } from '@/application/di/app-dependencies';
+import type { Lead } from '@/domain/leads/lead';
 
 type SearchState =
   | 'idle'
@@ -26,6 +28,15 @@ type SearchState =
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, '').slice(0, 10);
+}
+
+function encodeLeads(leads: Lead[]) {
+  return encodeURIComponent(JSON.stringify(leads.slice(0, 2)));
+}
+
+function leadMatchesMobile(lead: Lead, mobileNumber: string) {
+  const leadMobile = digitsOnly(lead.mobile);
+  return Boolean(leadMobile) && leadMobile.endsWith(mobileNumber);
 }
 
 export default function CustomersScreen() {
@@ -62,7 +73,7 @@ export default function CustomersScreen() {
     findCustomer.reset();
 
     findCustomer.mutate(formattedMobile, {
-      onSuccess: (customers) => {
+      onSuccess: async (customers) => {
         const etbCustomer =
           customers.find(
             (customer) =>
@@ -92,6 +103,29 @@ export default function CustomersScreen() {
 
         if (!etbCustomer) {
           if (newCustomer) {
+            let leads: Lead[] = [];
+            try {
+              const fetchedLeads = await leadUseCases.listLeads.execute({
+                mobileNumber: `91${formattedMobile}`,
+              });
+              leads = fetchedLeads.filter((lead) =>
+                leadMatchesMobile(lead, formattedMobile)
+              );
+            } catch {
+              leads = [];
+            }
+
+            if (leads.length > 0) {
+              router.replace({
+                pathname: '/lead-details',
+                params: {
+                  mobile: formattedMobile,
+                  leads: encodeLeads(leads),
+                },
+              });
+              return;
+            }
+
             router.replace({
               pathname: '/new-customer',
               params: {
