@@ -18,18 +18,25 @@ import { globalStyles } from '@/theme/globalStyles';
 
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFindCustomerMutation } from '@/hooks/use-find-customer';
-import type { ExistingCustomer } from '@/domain/customers/customer';
-
-type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
+import { leadUseCases } from '@/application/di/app-dependencies';
+import type { Lead } from '@/domain/leads/lead';
 
 type SearchState =
   | 'idle'
-  | 'existing'
-  | 'ntb'
-  | 'prospect';
+  | 'searching'
+  | 'empty';
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, '').slice(0, 10);
+}
+
+function encodeLeads(leads: Lead[]) {
+  return encodeURIComponent(JSON.stringify(leads.slice(0, 2)));
+}
+
+function leadMatchesMobile(lead: Lead, mobileNumber: string) {
+  const leadMobile = digitsOnly(lead.mobile);
+  return Boolean(leadMobile) && leadMobile.endsWith(mobileNumber);
 }
 
 export default function CustomersScreen() {
@@ -37,12 +44,6 @@ export default function CustomersScreen() {
   const findCustomer = useFindCustomerMutation();
 
   const [mobile, setMobile] = useState('');
-
-  const [selectedTab, setSelectedTab] =
-    useState<CustomerTab>('Accounts');
-
-  const [resolvedCustomer, setResolvedCustomer] =
-    useState<ExistingCustomer | null>(null);
 
   const [searchState, setSearchState] =
     useState<SearchState>('idle');
@@ -52,19 +53,13 @@ export default function CustomersScreen() {
     [mobile]
   );
 
-  const resetCustomerView = useCallback(() => {
-    setMobile('');
-    setSelectedTab('Accounts');
-    setResolvedCustomer(null);
-    setSearchState('idle');
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       return () => {
-        resetCustomerView();
+        setMobile('');
+        setSearchState('idle');
       };
-    }, [resetCustomerView])
+    }, [])
   );
 
   const handleSearch = () => {
@@ -74,30 +69,83 @@ export default function CustomersScreen() {
       return;
     }
 
+    setSearchState('searching');
+    findCustomer.reset();
+
     findCustomer.mutate(formattedMobile, {
-      onSuccess: (customer) => {
-        if (customer) {
-          setResolvedCustomer(customer);
-          setSearchState('existing');
-          setSelectedTab('Accounts');
+      onSuccess: async (customers) => {
+        const etbCustomer =
+          customers.find(
+            (customer) =>
+              Number(customer.matchCount) > 0 &&
+              customer.recordType !== 'INPUT'
+          ) ??
+          customers.find((customer) => Number(customer.matchCount) > 0);
+
+        if (etbCustomer) {
+          router.push({
+            pathname: '/customer-details',
+            params: {
+              name: etbCustomer.name,
+              phone1: etbCustomer.phone1,
+              customerId: etbCustomer.customerId,
+              ucic: etbCustomer.ucic,
+              recordType: etbCustomer.recordType,
+              matchType: etbCustomer.matchType,
+              matchCount: etbCustomer.matchCount,
+              sourceSystem: etbCustomer.sourceSystem,
+            },
+          });
           return;
         }
-        setSearchState('prospect');
+
+        const newCustomer = customers.find((customer) => Number(customer.matchCount) <= 0);
+
+        if (!etbCustomer) {
+          if (newCustomer) {
+            let leads: Lead[] = [];
+            try {
+              const fetchedLeads = await leadUseCases.listLeads.execute({
+                mobileNumber: `91${formattedMobile}`,
+              });
+              leads = fetchedLeads.filter((lead) =>
+                leadMatchesMobile(lead, formattedMobile)
+              );
+            } catch {
+              leads = [];
+            }
+
+            if (leads.length > 0) {
+              router.replace({
+                pathname: '/lead-details',
+                params: {
+                  mobile: formattedMobile,
+                  leads: encodeLeads(leads),
+                },
+              });
+              return;
+            }
+
+            router.replace({
+              pathname: '/new-customer',
+              params: {
+                mobile: formattedMobile,
+              },
+            });
+            return;
+          }
+
+          setSearchState('empty');
+          return;
+        }
       },
       onError: () => {
-        setSearchState('prospect');
+        setSearchState('empty');
       },
     });
   };
 
-  const showExistingCustomer =
-    searchState === 'existing' &&
-    resolvedCustomer;
-
-  const showBottomActions =
-    searchState === 'existing' ||
-    searchState === 'ntb' ||
-    searchState === 'prospect';
+  const showBottomActions = searchState === 'empty';
 
   return (
     <SafeAreaView
@@ -117,369 +165,73 @@ export default function CustomersScreen() {
                 : insets.bottom + 40,
             },
           ]}>
-          {/* SEARCH SCREEN */}
-          {searchState === 'idle' && (
-            <View>
-              <Text style={styles.pageTitle}>
-                Find a customer
-              </Text>
+          <View>
+            <Text style={styles.pageTitle}>
+              Find a customer
+            </Text>
 
-              <Text style={styles.pageSubtitle}>
-                Search by mobile number to continue
-              </Text>
+            <Text style={styles.pageSubtitle}>
+              Search by mobile number to continue
+            </Text>
 
-              <Text style={styles.label}>
-                MOBILE NUMBER
-              </Text>
+            <Text style={styles.label}>
+              MOBILE NUMBER
+            </Text>
 
-              <View style={styles.inputContainer}>
-                <Ionicons
-                  name="call-outline"
-                  size={18}
-                  color="#667085"
-                />
+            <View style={styles.inputContainer}>
+              <Ionicons
+                name="call-outline"
+                size={18}
+                color="#667085"
+              />
 
-                <TextInput
-                  value={mobile}
-                  onChangeText={(v) =>
-                    setMobile(digitsOnly(v))
-                  }
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  placeholder="Enter Mobile Number"
-                  placeholderTextColor="#98A2B3"
-                  style={styles.input}
-                />
-              </View>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={[
-                  styles.searchButton,
-                  formattedMobile.length !== 10 &&
-                    styles.disabledButton,
-                ]}
-                disabled={
-                  formattedMobile.length !== 10 ||
-                  findCustomer.isPending
-                }
-                onPress={handleSearch}>
-                {findCustomer.isPending ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#FFFFFF"
-                  />
-                ) : (
-                  <Ionicons
-                    name="search"
-                    size={18}
-                    color="#FFFFFF"
-                  />
-                )}
-
-                <Text style={styles.searchButtonText}>
-                  {findCustomer.isPending
-                    ? 'Searching…'
-                    : 'Search'}
-                </Text>
-              </TouchableOpacity>
-
+              <TextInput
+                value={mobile}
+                onChangeText={(v) => setMobile(digitsOnly(v))}
+                keyboardType="number-pad"
+                maxLength={10}
+                placeholder="Enter Mobile Number"
+                placeholderTextColor="#98A2B3"
+                style={styles.input}
+              />
             </View>
-          )}
 
-          {/* EXISTING CUSTOMER */}
-          {showExistingCustomer && (
-            <View style={styles.section}>
-              <View style={styles.successBanner}>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={18}
-                  color="#15803D"
-                />
-
-                <Text style={styles.successBannerText}>
-                  Existing Customer
-                </Text>
-              </View>
-
-              <View style={styles.profileCard}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {resolvedCustomer.initials}
-                  </Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.profileName}>
-                    {resolvedCustomer.name}
-                  </Text>
-
-                  <View style={styles.metaRow}>
-                    <Ionicons
-                      name="card-outline"
-                      size={14}
-                      color="#667085"
-                    />
-
-                    <Text style={styles.metaText}>
-                      {resolvedCustomer.cif}
-                    </Text>
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    <Ionicons
-                      name="call-outline"
-                      size={14}
-                      color="#667085"
-                    />
-
-                    <Text style={styles.metaText}>
-                      {resolvedCustomer.mobile}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.tabs}>
-                {(
-                  [
-                    'Accounts',
-                    'Leads',
-                    'Insights',
-                  ] as CustomerTab[]
-                ).map((tab) => {
-                  const active =
-                    selectedTab === tab;
-
-                  return (
-                    <TouchableOpacity
-                      key={tab}
-                      style={[
-                        styles.tabButton,
-                        active &&
-                          styles.activeTabButton,
-                      ]}
-                      onPress={() =>
-                        setSelectedTab(tab)
-                      }>
-                      <Text
-                        style={[
-                          styles.tabText,
-                          active &&
-                            styles.activeTabText,
-                        ]}>
-                        {tab}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {selectedTab === 'Accounts' && (
-                <View style={styles.cardsStack}>
-                  {resolvedCustomer.accounts.map(
-                    (item) => (
-                      <View
-                        key={item.title}
-                        style={styles.dataCard}>
-                        <View
-                          style={styles.iconWrap}>
-                          <Ionicons
-                            name={item.icon as any}
-                            size={22}
-                            color="#1D4ED8"
-                          />
-                        </View>
-
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={
-                              styles.cardTitle
-                            }>
-                            {item.title}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.cardSubtitle
-                            }>
-                            {item.masked}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={
-                            styles.greenPill
-                          }>
-                          <Text
-                            style={
-                              styles.greenPillText
-                            }>
-                            {item.status}
-                          </Text>
-                        </View>
-                      </View>
-                    )
-                  )}
-                </View>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[
+                styles.searchButton,
+                formattedMobile.length !== 10 && styles.disabledButton,
+              ]}
+              disabled={formattedMobile.length !== 10 || findCustomer.isPending}
+              onPress={handleSearch}>
+              {findCustomer.isPending ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Ionicons name="search" size={18} color="#FFFFFF" />
               )}
 
-              {selectedTab === 'Leads' && (
-                <View style={styles.cardsStack}>
-                  {resolvedCustomer.leads.map(
-                    (item) => (
-                      <View
-                        key={item.title}
-                        style={styles.dataCard}>
-                        <View
-                          style={
-                            styles.orangeIconWrap
-                          }>
-                          <Ionicons
-                            name={item.icon as any}
-                            size={22}
-                            color="#EA580C"
-                          />
-                        </View>
+              <Text style={styles.searchButtonText}>
+                {findCustomer.isPending ? 'Searching…' : 'Search'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={
-                              styles.cardTitle
-                            }>
-                            {item.title}
-                          </Text>
-
-                          <Text
-                            style={
-                              styles.cardSubtitle
-                            }>
-                            {item.subtitle}
-                          </Text>
-                        </View>
-
-                        <View
-                          style={
-                            styles.orangePill
-                          }>
-                          <Text
-                            style={
-                              styles.orangePillText
-                            }>
-                            {item.status}
-                          </Text>
-                        </View>
-                      </View>
-                    )
-                  )}
-                </View>
-              )}
-
-              {selectedTab === 'Insights' && (
-                <View style={styles.cardsStack}>
-                  {resolvedCustomer.insights.map(
-                    (item) => (
-                      <View
-                        key={item.text}
-                        style={styles.dataCard}>
-                        <View
-                          style={styles.iconWrap}>
-                          <Ionicons
-                            name={item.icon as any}
-                            size={20}
-                            color="#1D4ED8"
-                          />
-                        </View>
-
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={
-                              styles.cardTitle
-                            }>
-                            {item.text}
-                          </Text>
-                        </View>
-                      </View>
-                    )
-                  )}
-                </View>
-              )}
+          {searchState === 'searching' ? (
+            <View style={styles.statusCard}>
+              <ActivityIndicator size="small" color="#1D4ED8" />
+              <Text style={styles.statusText}>Searching customer...</Text>
             </View>
-          )}
+          ) : null}
 
-          {/* NTB SCREEN */}
-          {searchState === 'ntb' && (
-            <View style={styles.section}>
-              <View style={styles.ntbBanner}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={18}
-                  color="#B45309"
-                />
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ntbTitle}>
-                    Lead Found – Customer not onboarded
-                  </Text>
-
-                  <Text style={styles.ntbSubtitle}>
-                    No accounts exist for this
-                    number yet.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.profileCard}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    PS
-                  </Text>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.profileName}>
-                    Priya Sharma
-                  </Text>
-
-                  <View style={styles.metaRow}>
-                    <Ionicons
-                      name="call-outline"
-                      size={14}
-                      color="#667085"
-                    />
-
-                    <Text style={styles.metaText}>
-                      {formattedMobile}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+          {searchState === 'empty' ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="person-outline" size={26} color="#B45309" />
+              <Text style={styles.emptyTitle}>No customer found</Text>
+              <Text style={styles.emptySubtitle}>
+                We could not find any matching customer for {formattedMobile}.
+              </Text>
             </View>
-          )}
-
-          {/* PROSPECT */}
-          {searchState === 'prospect' && (
-            <View style={styles.section}>
-              <View style={styles.prospectCard}>
-                <View style={styles.prospectIcon}>
-                  <Ionicons
-                    name="person-add-outline"
-                    size={28}
-                    color="#1D4ED8"
-                  />
-                </View>
-
-                <Text style={styles.prospectTitle}>
-                  No existing customer or lead found
-                </Text>
-
-                <Text
-                  style={styles.prospectSubtitle}>
-                  {formattedMobile}
-                </Text>
-              </View>
-            </View>
-          )}
+          ) : null}
         </ScrollView>
 
         {/* FIXED BOTTOM ACTIONS */}
@@ -488,91 +240,22 @@ export default function CustomersScreen() {
             style={[
               styles.actionsShell,
               {
-                paddingBottom:
-                  insets.bottom + 12,
+                paddingBottom: insets.bottom + 12,
               },
             ]}>
-            {searchState === 'existing' && (
-              <>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() =>
-                    router.push('/modal')
-                  }>
-                  <Ionicons
-                    name="person-add-outline"
-                    size={18}
-                    color="#FFFFFF"
-                  />
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push('/modal')}>
+              <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>Create New Lead</Text>
+            </TouchableOpacity>
 
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }>
-                    Create New Lead
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.secondaryButton}>
-                  <Ionicons
-                    name="document-text-outline"
-                    size={18}
-                    color="#111827"
-                  />
-
-                  <Text
-                    style={
-                      styles.secondaryButtonText
-                    }>
-                    Raise Service Request
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {searchState === 'ntb' && (
-              <>
-                <TouchableOpacity
-  style={styles.primaryButton}
-  onPress={() =>
-    router.push({
-                  pathname: '/(casa)/open/[step]',
-
-      params: {
-        step: 'identify',
-        type: 'Savings',
-      },
-    })
-  }>
-  <Text style={styles.primaryButtonText}>
-    Continue Account Opening
-  </Text>
-</TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.secondaryButton}>
-                  <Text
-                    style={
-                      styles.secondaryButtonText
-                    }>
-                    Create New Lead
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {searchState === 'prospect' && (
-              <TouchableOpacity
-                style={styles.primaryButton}>
-                <Text
-                  style={
-                    styles.primaryButtonText
-                  }>
-                  Create New Lead
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => router.push('/modal')}>
+              <Ionicons name="document-text-outline" size={18} color="#111827" />
+              <Text style={styles.secondaryButtonText}>Raise Service Request</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -871,6 +554,46 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
     color: '#6B7280',
+  },
+
+  statusCard: {
+    minHeight: 60,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  statusText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+
+  emptyCard: {
+    minHeight: 96,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    padding: 16,
+    justifyContent: 'center',
+    gap: 4,
+  },
+
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#B45309',
   },
 
   actionsShell: {

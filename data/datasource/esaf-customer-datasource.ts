@@ -18,7 +18,7 @@ export class EsafCustomerDatasource {
       headers: buildEsafHeaders({
         bearerToken: token,
         channel: 'API',
-        externalReferencePrefix: 'AB12CD34',
+        externalReferenceNumber: 'AB12CD34-12340890067234567-122999',
       }),
       body: JSON.stringify(dto),
     });

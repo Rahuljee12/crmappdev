@@ -2,6 +2,7 @@ import { ESAF_DEFAULT_CHANNEL } from './esaf-config';
 
 export function buildEsafHeaders(params: {
   channel?: string;
+  externalReferenceNumber?: string;
   externalReferencePrefix?: string;
   bearerToken?: string;
 }) {

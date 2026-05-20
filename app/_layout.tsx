@@ -91,6 +91,27 @@ function AppContent() {
             headerShown: false,
           }}
         />
+
+        <Stack.Screen
+          name="new-customer"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="lead-details"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="customer-details"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
 
       <StatusBar style="dark" />

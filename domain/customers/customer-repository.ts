@@ -1,6 +1,5 @@
-import type { ExistingCustomer } from './customer';
+import type { CustomerSearchResult } from './customer-search-result';
 
 export interface CustomerRepository {
-  findCustomerByMobile(mobile: string): Promise<ExistingCustomer | null>;
+  findCustomerByMobile(mobile: string): Promise<CustomerSearchResult[]>;
 }
-
