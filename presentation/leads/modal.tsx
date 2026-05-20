@@ -22,7 +22,6 @@ import { useCreateLeadMutation } from '@/hooks/use-create-lead';
 import { useSendLeadOtpMutation } from '@/hooks/use-send-lead-otp';
 import { useVerifyLeadOtpMutation } from '@/hooks/use-verify-lead-otp';
 import { useGenerateAadhaarOtpMutation } from '@/hooks/use-generate-aadhaar-otp';
-import { useAuthenticateAadhaarOtpMutation } from '@/hooks/use-authenticate-aadhaar-otp';
 import { useFetchAadhaarDetailsMutation } from '@/hooks/use-fetch-aadhaar-details';
 import { useValidatePanMutation } from '@/hooks/use-validate-pan';
 import { log } from '@/core/utils/logger';
@@ -156,6 +155,7 @@ export function NewLeadModalScreen() {
   const [panFatherName, setPanFatherName] = useState('');
   const [panDob, setPanDob] = useState(''); // YYYY-MM-DD
   const [panValidated, setPanValidated] = useState(false);
+  const [identityDetailsExpanded, setIdentityDetailsExpanded] = useState(false);
   const [productType, setProductType] = useState('Savings');
   const [productTypeOpen, setProductTypeOpen] = useState(false);
   const [productCode, setProductCode] = useState('P101 · LALIT');
@@ -188,7 +188,6 @@ export function NewLeadModalScreen() {
   const sendOtp = useSendLeadOtpMutation();
   const verifyOtp = useVerifyLeadOtpMutation();
   const generateAadhaarOtp = useGenerateAadhaarOtpMutation();
-  const authenticateAadhaarOtp = useAuthenticateAadhaarOtpMutation();
   const fetchAadhaarDetails = useFetchAadhaarDetailsMutation();
   const validatePan = useValidatePanMutation();
 
@@ -197,7 +196,6 @@ export function NewLeadModalScreen() {
     verifyOtp.isPending ||
     createLead.isPending ||
     generateAadhaarOtp.isPending ||
-    authenticateAadhaarOtp.isPending ||
     fetchAadhaarDetails.isPending ||
     aadhaarFlowLoading ||
     validatePan.isPending;
@@ -327,8 +325,7 @@ export function NewLeadModalScreen() {
                   : 'SA';
 
 
-    const extractedCode =
-      selectedProductCode.code.replace(/\D/g, '') || '3008';
+    const extractedCode = '3008';
 
     createLead.mutate(
       {
@@ -340,7 +337,7 @@ export function NewLeadModalScreen() {
           ? (aadhaarLeadPrefill ?? undefined)
           : documentType === 'PAN'
             ? {
-                firstName: panFullName.trim(),
+                ...splitFullName(panFullName),
                 panNumber: panNumber.trim(),
                 fatherName: panFatherName.trim(),
                 dob: panDob.trim(),
@@ -351,8 +348,10 @@ export function NewLeadModalScreen() {
         onSuccess: () => {
           router.back();
         },
-        onError: () => {
-          Alert.alert('Lead creation failed', 'Please try again.');
+        onError: (error) => {
+          const message =
+            error instanceof Error ? error.message : 'Please try again.';
+          Alert.alert('Lead creation failed', message);
         },
       },
     );
@@ -379,6 +378,98 @@ export function NewLeadModalScreen() {
     if (g === 'T') return 'Transgender';
     return gender;
   }, [aadhaarLeadPrefill?.gender, documentType]);
+
+  const splitFullName = (fullNameRaw: string) => {
+    const parts = fullNameRaw.trim().split(/\s+/).filter(Boolean);
+    if (parts.length <= 1) {
+      return { firstName: fullNameRaw.trim(), lastName: undefined as string | undefined };
+    }
+    return {
+      firstName: parts[0] ?? fullNameRaw.trim(),
+      lastName: parts.slice(1).join(' ') || undefined,
+    };
+  };
+
+  const identitySummary = useMemo(() => {
+    if (documentType === 'PAN') {
+      const name = panFullName.trim();
+      const pan = panNumber.trim();
+      const father = panFatherName.trim();
+      const dob = panDob.trim();
+      return [
+        { label: 'Name', value: name || '—' },
+        { label: 'PAN', value: pan || '—' },
+        { label: 'Father name', value: father || '—' },
+        { label: 'DOB', value: dob || '—' },
+      ];
+    }
+
+    const first = aadhaarLeadPrefill?.firstName?.trim();
+    const last = aadhaarLeadPrefill?.lastName?.trim();
+    const name = [first, last].filter(Boolean).join(' ');
+    const address = aadhaarLeadPrefill?.permanentAddressStreet?.trim();
+    const pin = aadhaarLeadPrefill?.permanentAddressPostalCode?.trim();
+    return [
+      { label: 'Name', value: name || '—' },
+      { label: 'Gender', value: profileGender || '—' },
+      { label: 'Address', value: address || '—' },
+      { label: 'PIN', value: pin || '—' },
+    ];
+  }, [
+    aadhaarLeadPrefill?.firstName,
+    aadhaarLeadPrefill?.lastName,
+    aadhaarLeadPrefill?.permanentAddressPostalCode,
+    aadhaarLeadPrefill?.permanentAddressStreet,
+    documentType,
+    panDob,
+    panFatherName,
+    panFullName,
+    panNumber,
+    profileGender,
+  ]);
+
+  const formatAadhaar = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 12);
+    if (digits.length !== 12) return value.trim() || '—';
+    return `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)}`;
+  };
+
+  const formatDobDDMMYYYY = (value: string | undefined) => {
+    const v = value?.trim();
+    if (!v) return '—';
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+    return v;
+  };
+
+  const identityVerifiedDetails = useMemo(() => {
+    if (documentType === 'PAN') {
+      return [
+        { label: 'DOB', value: formatDobDDMMYYYY(panDob) },
+        { label: 'Father name', value: panFatherName.trim() || '—' },
+      ];
+    }
+
+    const address = aadhaarLeadPrefill?.permanentAddressStreet?.trim();
+    const state = aadhaarLeadPrefill?.permanentAddressStateCode?.trim();
+    const pin = aadhaarLeadPrefill?.permanentAddressPostalCode?.trim();
+    const addressLine = [address, [state, pin].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+    return [
+      { label: 'DOB', value: formatDobDDMMYYYY(aadhaarLeadPrefill?.dob) },
+      { label: 'Gender', value: profileGender || '—' },
+      { label: 'Address (UIDAI)', value: addressLine || '—' },
+    ];
+  }, [
+    aadhaarLeadPrefill?.dob,
+    aadhaarLeadPrefill?.permanentAddressPostalCode,
+    aadhaarLeadPrefill?.permanentAddressStateCode,
+    aadhaarLeadPrefill?.permanentAddressStreet,
+    documentType,
+    panDob,
+    panFatherName,
+    profileGender,
+  ]);
 
   const handleOtpChange = (value: string, index: number) => {
     const nextValue = value.replace(/\D/g, '').slice(0, 1);
@@ -462,6 +553,7 @@ export function NewLeadModalScreen() {
     setPanFatherName('');
     setPanDob('');
     setPanValidated(false);
+    setIdentityDetailsExpanded(false);
   }, [documentType]);
 
   return (
@@ -1088,7 +1180,45 @@ export function NewLeadModalScreen() {
                       />
 
                       {panValidated ? (
-                        <Text style={[styles.successLine, { marginTop: 10 }]}>✓ PAN validated</Text>
+                        <View style={[styles.identityVerifiedCard, { marginTop: 12 }]}>
+                          <View style={styles.identityVerifiedTopRow}>
+                            <View style={styles.identityVerifiedLeft}>
+                              <View style={styles.identityVerifiedIcon}>
+                                <Ionicons name="checkmark" size={S(16)} color="#FFFFFF" />
+                              </View>
+                              <Text style={styles.identityVerifiedTitle}>Identity verified</Text>
+                            </View>
+
+                            <Pressable
+                              onPress={() => setIdentityDetailsExpanded((v) => !v)}
+                              style={styles.identityVerifiedToggle}>
+                              <Text style={styles.identityVerifiedToggleText}>
+                                {identityDetailsExpanded ? 'Hide' : 'Show More'}
+                              </Text>
+                              <Ionicons
+                                name={identityDetailsExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={S(18)}
+                                color="#0F172A"
+                              />
+                            </Pressable>
+                          </View>
+
+                          <Text style={styles.identityVerifiedName}>{profileName}</Text>
+                          <Text style={styles.identityVerifiedSub}>
+                            PAN · {panNumber.trim() || '—'}
+                          </Text>
+
+                          {identityDetailsExpanded ? (
+                            <View style={styles.identityVerifiedDetails}>
+                              {identityVerifiedDetails.map((row) => (
+                                <View key={row.label} style={styles.identityRow}>
+                                  <Text style={styles.identityKey}>{row.label}</Text>
+                                  <Text style={styles.identityValue}>{row.value}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
                       ) : null}
                     </View>
                   ) : null}
@@ -1135,7 +1265,7 @@ export function NewLeadModalScreen() {
                           documentType === 'Aadhaar'
                             ? !identityOtpComplete ||
                               !aadhaarTxn ||
-                              authenticateAadhaarOtp.isPending ||
+                              fetchAadhaarDetails.isPending ||
                               aadhaarOtpVerified
                             : !identityOtpComplete
                         }
@@ -1194,19 +1324,6 @@ export function NewLeadModalScreen() {
 
                           setAadhaarFlowLoading(true);
                           try {
-                            const authResponse = await authenticateAadhaarOtp.mutateAsync({
-                              encryptedUid,
-                              txn: aadhaarTxn,
-                              auth: authBlock ?? undefined,
-                            });
-
-                            const statusCode = authResponse?.status?.[0]?.statusCode ?? '';
-                            if (statusCode !== '000') {
-                              throw new Error(
-                                authResponse?.status?.[0]?.statusMessage ?? 'Aadhaar verification failed',
-                              );
-                            }
-
                             const detailsResponse = await fetchAadhaarDetails.mutateAsync({
                               encryptedUid,
                               txn: aadhaarTxn,
@@ -1217,10 +1334,19 @@ export function NewLeadModalScreen() {
                               },
                             });
 
+                            const statusCode = detailsResponse?.status?.[0]?.statusCode ?? '';
+                            if (statusCode !== '000') {
+                              throw new Error(
+                                detailsResponse?.status?.[0]?.statusMessage ??
+                                  'Aadhaar verification failed',
+                              );
+                            }
+
                             const prefill =
                               extractLeadPrefillFromAadhaarAuthenticateResponse(detailsResponse);
                             setAadhaarLeadPrefill(prefill);
                             setAadhaarOtpVerified(true);
+                            setIdentityDetailsExpanded(false);
                           } catch (error) {
                             log.error('[AADHAAR] full flow failed', error);
                             const message =
@@ -1248,11 +1374,53 @@ export function NewLeadModalScreen() {
                         <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>
                           {aadhaarOtpVerified
                             ? 'Verified'
-                            : authenticateAadhaarOtp.isPending
+                            : fetchAadhaarDetails.isPending
                               ? 'Verifying…'
                               : 'Verify OTP'}
                         </Text>
                       </TouchableOpacity>
+
+                      {aadhaarOtpVerified ? (
+                        <View style={[styles.identityVerifiedCard, { marginTop: 14 }]}>
+                          <View style={styles.identityVerifiedTopRow}>
+                            <View style={styles.identityVerifiedLeft}>
+                              <View style={styles.identityVerifiedIcon}>
+                                <Ionicons name="checkmark" size={S(16)} color="#FFFFFF" />
+                              </View>
+                              <Text style={styles.identityVerifiedTitle}>Identity verified</Text>
+                            </View>
+
+                            <Pressable
+                              onPress={() => setIdentityDetailsExpanded((v) => !v)}
+                              style={styles.identityVerifiedToggle}>
+                              <Text style={styles.identityVerifiedToggleText}>
+                                {identityDetailsExpanded ? 'Hide details' : 'Show all details'}
+                              </Text>
+                              <Ionicons
+                                name={identityDetailsExpanded ? 'chevron-up' : 'chevron-down'}
+                                size={S(18)}
+                                color="#0F172A"
+                              />
+                            </Pressable>
+                          </View>
+
+                          <Text style={styles.identityVerifiedName}>{profileName}</Text>
+                          <Text style={styles.identityVerifiedSub}>
+                            Aadhaar · {formatAadhaar(documentNumber)}
+                          </Text>
+
+                          {identityDetailsExpanded ? (
+                            <View style={styles.identityVerifiedDetails}>
+                              {identityVerifiedDetails.map((row) => (
+                                <View key={row.label} style={styles.identityRow}>
+                                  <Text style={styles.identityKey}>{row.label}</Text>
+                                  <Text style={styles.identityValue}>{row.value}</Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </View>
                   ) : null}
                 </View>
@@ -1320,6 +1488,20 @@ export function NewLeadModalScreen() {
                   <Text style={styles.profilePill}>
                     {incomeBand === 'Select band' ? '—' : `₹${incomeBand}`}
                   </Text>
+                </View>
+
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>
+                    Identity · {documentType === 'PAN' ? 'PAN' : 'Aadhaar'}
+                  </Text>
+                  <View style={styles.identityList}>
+                    {identitySummary.map((row) => (
+                      <View key={row.label} style={styles.identityRow}>
+                        <Text style={styles.identityKey}>{row.label}</Text>
+                        <Text style={styles.identityValue}>{row.value}</Text>
+                      </View>
+                    ))}
+                  </View>
                 </View>
 
                 <View style={styles.card}>
@@ -2048,6 +2230,93 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     fontSize: 12,
     fontWeight: '700',
+  },
+  identityList: {
+    marginTop: 10,
+    gap: 10,
+  },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  identityKey: {
+    width: '34%',
+    color: '#5D6C91',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  identityValue: {
+    flex: 1,
+    color: '#142A60',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+  identityVerifiedCard: {
+    backgroundColor: '#E9F9ED',
+    borderWidth: 1,
+    borderColor: '#9AD4A5',
+    borderRadius: 16,
+    padding: 14,
+  },
+  identityVerifiedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  identityVerifiedLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  identityVerifiedIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    backgroundColor: '#15803D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  identityVerifiedTitle: {
+    color: '#14532D',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  identityVerifiedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  identityVerifiedToggleText: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  identityVerifiedName: {
+    marginTop: 12,
+    color: '#142A60',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  identityVerifiedSub: {
+    marginTop: 4,
+    color: '#5D6C91',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  identityVerifiedDetails: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(20,83,45,0.18)',
+    gap: 10,
   },
   footer: {
     flexDirection: 'row',

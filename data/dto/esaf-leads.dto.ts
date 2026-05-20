@@ -55,6 +55,8 @@ export type EsafCreateLeadRequestDto = {
 
     // Permanent Address
     permanentAddressStreet?: string;
+    permanentAddressStreet2?: string;
+    permanentAddressStreet3?: string;
     permanentAddressStateCode?: string;
     permanentAddressCityCode?: string;
     permanentAddressPostalCode?: string;

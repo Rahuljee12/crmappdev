@@ -41,136 +41,168 @@ export class LeadApiRepository implements LeadRepository {
     const mobileCountryCode =
       process.env.EXPO_PUBLIC_ESAF_MOBILE_COUNTRY_CODE ?? '91';
 
-    // const defaultStateCode = this.required(
-    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_STATE_CODE,
-    //   'EXPO_PUBLIC_ESAF_DEFAULT_STATE_CODE',
-    // );
-    // const defaultCityCode = this.required(
-    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_CITY_CODE,
-    //   'EXPO_PUBLIC_ESAF_DEFAULT_CITY_CODE',
-    // );
-    // const defaultCountryCode =
-    //   process.env.EXPO_PUBLIC_ESAF_DEFAULT_COUNTRY_CODE ?? 'IN';
+    const defaultStateCode =
+      process.env.EXPO_PUBLIC_ESAF_DEFAULT_STATE_CODE ?? "KA";
+    
+    const defaultCityCode =
+      process.env.EXPO_PUBLIC_ESAF_DEFAULT_CITY_CODE ?? "560";
+      
+    const defaultCountryCode =
+      process.env.EXPO_PUBLIC_ESAF_DEFAULT_COUNTRY_CODE ?? 'IN';
+    const defaultPostalCode =
+      process.env.EXPO_PUBLIC_ESAF_DEFAULT_POSTAL_CODE ?? '560066';
 
-    // const permanentAddressStreet = params.permanentAddressStreet ?? '';
-    // const permanentAddressPostalCode = params.permanentAddressPostalCode ?? '';
-    // const communicationAddressStreet =
-    //   params.communicationAddressStreet ?? params.permanentAddressStreet;
-    // const communicationAddressPostalCode =
-    //   params.communicationAddressPostalCode ?? params.permanentAddressPostalCode;
+    const salutation = params.salutation?.trim() || undefined;
+    const firstName = params.firstName?.trim() || undefined;
+    const lastName = params.lastName?.trim() || undefined;
+    const emailAddress = params.emailAddress?.trim() || undefined;
+    const panNumber = params.panNumber?.trim() || undefined;
+    const fatherName = params.fatherName?.trim() || undefined;
+    const dob = params.dob?.trim() || undefined;
 
-    await this.ds.createLead({
+    const permanentAddressStreet = params.permanentAddressStreet?.trim() || undefined;
+    const permanentAddressPostalCode = params.permanentAddressPostalCode?.trim() || undefined;
+    const communicationAddressStreet =
+      params.communicationAddressStreet?.trim() || permanentAddressStreet;
+    const communicationAddressPostalCode =
+      params.communicationAddressPostalCode?.trim() || permanentAddressPostalCode;
+
+    const permanentAddressCountryCode =
+      params.permanentAddressCountryCode?.trim() || defaultCountryCode;
+    const permanentAddressStateCode =
+      params.permanentAddressStateCode?.trim() || defaultStateCode;
+    const permanentAddressCityCode =
+      params.permanentAddressCityCode?.trim() || defaultCityCode;
+
+    const communicationAddressCountryCode =
+      params.communicationAddressCountryCode?.trim() || permanentAddressCountryCode;
+    const communicationAddressStateCode =
+      params.communicationAddressStateCode?.trim() || permanentAddressStateCode;
+    const communicationAddressCityCode =
+      params.communicationAddressCityCode?.trim() || permanentAddressCityCode;
+
+    const leadDescriptionParts = [
+      panNumber ? `PAN:${panNumber}` : undefined,
+      fatherName ? `FATHER:${fatherName}` : undefined,
+      dob ? `DOB:${dob}` : undefined,
+      permanentAddressPostalCode ? `PIN:${permanentAddressPostalCode}` : undefined,
+    ].filter(Boolean);
+    const leadDescription = leadDescriptionParts.length ? leadDescriptionParts.join(' | ') : undefined;
+
+    const response = await this.ds.createLead({
       request: {
-    salutation: 'Mrs.',
-    firstName: 'Avni',
-    lastName: 'Sharma',
+        salutation,
+        firstName,
+        lastName,
 
         category: 'I',
-    leadSource: 'Cold Call',
-    leadJobTitle: 'Manager',
+        leadSource: 'Cold Call',
+        leadJobTitle: 'Manager',
 
         mobileNumber: params.mobileNumber,
         mobileCountryCode,
 
-    officePhone: '6522367250',
-    officePhoneCountryCode: '91',
+        officePhone: '6522367250',
+        officePhoneCountryCode: '91',
 
-    emailAddress: 'kokotest@gmail.com',
+        emailAddress: "kokotest@gmail.com",
+        panNumber: "DSFTA7621L",
 
-    homeBranchCode: '1155',
+        homeBranchCode,
 
-    leadInterestedProduct: 'SA',
-    productCode: '3008',
+        leadInterestedProduct: params.interestedProduct,
+        productCode: params.productCode,
 
         companyName: '',
 
         lcEmpCode,
         lgEmpCode,
 
-    permanentAddressStreet:
-      'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
+        permanentAddressStreet:
+          permanentAddressStreet ??
+          'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
 
-    permanentAddressCountryCode: 'IN',
-    permanentAddressStateCode: 'KA',
+        permanentAddressStreet2: 'Ramgondanahalli',
+        permanentAddressStreet3: 'Whitefield',
+        permanentAddressCountryCode,
+        permanentAddressStateCode,
+        permanentAddressCityCode,
+        permanentAddressPostalCode: permanentAddressPostalCode ?? defaultPostalCode,
 
-    // IMPORTANT:
-    // use same valid city code from working fetch response
-    permanentAddressCityCode: '248120',
+        communicationAddressStreet:
+          communicationAddressStreet ??
+          'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
 
-    permanentAddressPostalCode: '560066',
+        communicationAddressStreet2: 'Ramgondanahalli',
 
-    communicationAddressStreet:
-      'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',
+        communicationAddressStreet3: 'Whitefield',
 
-    communicationAddressStreet2: 'Ramgondanahalli',
+        communicationAddressCountryCode,
+        communicationAddressStateCode,
+        communicationAddressCityCode,
+        communicationAddressPostalCode: communicationAddressPostalCode ?? defaultPostalCode,
 
-    communicationAddressStreet3: 'Whitefield',
+        cDigiPin: '804B5600',
+        pDigiPin: 'G7X4-K9R2',
 
-    communicationAddressCountryCode: 'IN',
-    communicationAddressStateCode: 'KA',
+        campaignCode: 'A1345',
+        leadDescription,
 
-    communicationAddressCityCode: '248120',
+        caObsRefId: '',
+        caMinBalance: '',
+        caOppStatus: '',
 
-    communicationAddressPostalCode: '560066',
+        saObsRefId: 'SA8432211',
+        saMinBalance: '5000.00',
+        saOppStatus: 'Open',
 
-    cDigiPin: '804B5600',
-    pDigiPin: 'G7X4-K9R2',
+        plObsRefId: '',
+        plOppAmount: '',
+        plOppStatus: '',
 
-    campaignCode: 'A1345',
+        aulObsRefId: '',
+        aulOppAmount: '',
+        aulOppStatus: '',
 
-    panNumber: 'DSFTA7621L',
+        dsglObsRefId: '',
+        dsglOppAmount: '',
+        dsglOppStatus: '',
 
-    leadDescription:
-      'The Lead is a Manager in ARKEA Group of Advertisers Pvt Ltd. He has been with the firm for 12 years. He is part of some of the prestigious projects for their firm. He has goodwill among peers, colleagues and employers.',
+        mlObsRefId: '',
+        mlOppAmount: '',
+        mlOppStatus: '',
 
-    caObsRefId: '',
-    caMinBalance: '',
-    caOppStatus: '',
+        fdObsRefId: '',
+        fdOppAmount: '',
+        fdOppStatus: '',
 
-    saObsRefId: 'SA8432211',
-    saMinBalance: '5000.00',
-    saOppStatus: 'Open',
+        rdObsRefId: '',
+        rdOppAmount: '',
+        rdOppStatus: '',
 
-    plObsRefId: '',
-    plOppAmount: '',
-    plOppStatus: '',
+        odObsRefId: '',
+        odOppAmount: '',
+        odOppStatus: '',
 
-    aulObsRefId: '',
-    aulOppAmount: '',
-    aulOppStatus: '',
+        alObsRefId: '',
+        alOppAmount: '',
+        alOppStatus: '',
 
-    dsglObsRefId: '',
-    dsglOppAmount: '',
-    dsglOppStatus: '',
+        msmeObsRefId: '',
+        msmeOppAmount: '',
+        msmeOppStatus: '',
 
-    mlObsRefId: '',
-    mlOppAmount: '',
-    mlOppStatus: '',
-
-    fdObsRefId: '',
-    fdOppAmount: '',
-    fdOppStatus: '',
-
-    rdObsRefId: '',
-    rdOppAmount: '',
-    rdOppStatus: '',
-
-    odObsRefId: '',
-    odOppAmount: '',
-    odOppStatus: '',
-
-    alObsRefId: '',
-    alOppAmount: '',
-    alOppStatus: '',
-
-    msmeObsRefId: '',
-    msmeOppAmount: '',
-    msmeOppStatus: '',
-
-    molObsRefId: '',
-    molOppAmount: '',
-    molOppStatus: '',
+        molObsRefId: '',
+        molOppAmount: '',
+        molOppStatus: '',
       },
     });
+
+    const statusCode = response?.status?.[0]?.statusCode?.trim() ?? '';
+    if (statusCode && statusCode !== '000') {
+      const statusMessage =
+        response?.status?.[0]?.statusMessage?.trim() || 'Lead creation failed';
+      throw new Error(statusMessage);
+    }
   }
 }

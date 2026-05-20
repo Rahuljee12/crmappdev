@@ -13,6 +13,8 @@ import {
   requireEkycAuthenticateTransactionInfo,
   requireEkycGenerateOtpTransactionInfo,
 } from '@/core/ekyc/ekyc-config';
+import { decryptEkycValue } from '@/core/ekyc/aadhaar-crypto';
+import { tryParseUidaiKycXml } from '@/core/ekyc/aadhaar-kyc';
 
 type OtpSendResponseDto = {
   request_id?: string;
@@ -77,6 +79,11 @@ type AadhaarAuthenticateResponseDto = {
     statusMessage?: string;
     source?: string;
   }[];
+  decryptedKyc?: {
+    xml: string;
+    Poi?: Record<string, string>;
+    Poa?: Record<string, string>;
+  };
 };
 
 type PanValidationResponseDto = {
@@ -106,6 +113,20 @@ export class EsafLeadsDatasource {
   private pickOrDefault(value: string | undefined, fallback: string) {
     const v = value?.trim();
     return v ? v : fallback;
+  }
+
+  private buildExternalReferenceNumber(base: string, lastDigits = 6) {
+    const cryptoObj = (globalThis as unknown as { crypto?: any }).crypto;
+    const bytes = new Uint8Array(lastDigits);
+    if (cryptoObj?.getRandomValues) {
+      cryptoObj.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i += 1) {
+        bytes[i] = Math.floor(Math.random() * 256);
+      }
+    }
+    const suffix = Array.from(bytes, (b) => String(b % 10)).join('');
+    return `${base}-${suffix}`;
   }
 
   async fetchLeads(dto: EsafFetchLeadsRequestDto) {
@@ -141,7 +162,7 @@ export class EsafLeadsDatasource {
       headers: buildEsafHeaders({
         bearerToken: token,
         channel: 'API',
-        externalReferencePrefix: 'AB12CD34-12303080412334567-122856',
+        externalReferencePrefix: 'AB12CD34-12303080412334567-122858',
       }),
       body: JSON.stringify(dto),
     });
@@ -159,8 +180,8 @@ export class EsafLeadsDatasource {
       method: 'POST',
       headers: buildEsafHeaders({
         bearerToken: token,
-        channel: dto.channel ?? 'AOCO',
-        externalReferencePrefix: dto.externalReferenceNumber ?? 'API-12309946299324567-122880',
+        channel: dto.channel ?? 'API',
+        externalReferencePrefix: dto.externalReferenceNumber ?? 'API-202512051243123-123457',
       }),
       body: JSON.stringify({
         event: 'AOCO_ACCOUNT_OPENING_OTP',
@@ -228,7 +249,7 @@ export class EsafLeadsDatasource {
     const token = await getEsafAccessToken();
     const url = `${requireEsafApiBaseUrl()}/int/mcrm/pan-validation/1.0`;
 
-    return httpJson<PanValidationResponseDto>(url, {
+    const response = httpJson<PanValidationResponseDto>(url, {
       method: 'POST',
       headers: buildEsafHeaders({
         bearerToken: token,
@@ -248,6 +269,10 @@ export class EsafLeadsDatasource {
         },
       }),
     });
+
+    console.log("pan response:", JSON.stringify(response,null,2))
+
+    return response;
   }
 
  async authenticateAadhaarOtp(dto: {
@@ -278,7 +303,7 @@ export class EsafLeadsDatasource {
     };
   }): Promise<AadhaarAuthenticateResponseDto> {
     const token = await getEsafAccessToken();
-    const url = `${requireEsafApiBaseUrl()}/int/mcrm/ekyc-authenticate/1.0`;
+    const url = `${requireEsafApiBaseUrl()}/int/mcrm/ekyc/1.0`;
     const transactionInfo = requireEkycAuthenticateTransactionInfo();
 
     const skeyCi = dto.auth?.skey?.ci;
@@ -293,52 +318,83 @@ export class EsafLeadsDatasource {
       );
     }
 
-    const response = httpJson<AadhaarAuthenticateResponseDto>(url, {
+    const response = await httpJson<AadhaarAuthenticateResponseDto>(url, {
       method: 'POST',
       headers: buildEsafHeaders({
         bearerToken: token,
         channel: 'API',
-        externalReferencePrefix: 'ABCDEF-20119180716741079-123456',
+        externalReferencePrefix: this.buildExternalReferenceNumber('ABCDEF-20119180716741079', 6),
       }),
       body: JSON.stringify({
         request: {
           transactionInfo,
-          auth: {
-            uid: dto.encryptedUid,
-            tid: dto.tid ?? '',
-            txn: dto.txn,
-            uses: {
-              pi: dto.uses?.pi ?? 'n',
-              pa: dto.uses?.pa ?? 'n',
-              pfa: dto.uses?.pfa ?? 'n',
-              bio: dto.uses?.bio ?? 'n',
-              pin: dto.uses?.pin ?? 'n',
-              otp: dto.uses?.otp ?? 'y',
-              ...(dto.uses?.bt ? { bt: dto.uses.bt } : null),
-            },
-            meta: {
-              rdsId: dto.meta?.rdsId ?? '',
-              rdsVer: dto.meta?.rdsVer ?? '',
-              dpId: dto.meta?.dpId ?? '',
-              dc: dto.meta?.dc ?? '',
-              mi: dto.meta?.mi ?? '',
-              mc: dto.meta?.mc ?? '',
-            },
-            skey: {
-              ci: skeyCi,
-              value: skeyValue,
-            },
-            data: {
-              type: dataType,
-              value: dataValue,
-            },
-            hmac: hmacValue,
-          },
+          kycRequestInfo: {
+            ra: "O",
+            pfr: "N",
+            lr: "N",
+            de: "N",
+            auth: {
+              uid: dto.encryptedUid,
+              tid: '',
+              txn: dto.txn,
+              type:"A",
+              uses: {
+                pi: 'n',
+                pa: 'n',
+                pfa: dto.uses?.pfa ?? 'n',
+                bio: dto.uses?.bio ?? 'n',
+                pin: dto.uses?.pin ?? 'n',
+                otp: dto.uses?.otp ?? 'y',
+              },
+              meta: {
+                udc: '',
+                rdsId: dto.meta?.rdsId ?? '',
+                rdsVer: dto.meta?.rdsVer ?? '',
+                dpId: dto.meta?.dpId ?? '',
+                dc: dto.meta?.dc ?? '',
+                mi: dto.meta?.mi ?? '',
+                mc: dto.meta?.mc ?? '',
+              },
+              skey: {
+                ci: skeyCi,
+                value: skeyValue,
+              },
+              data: {
+                type: dataType,
+                pid: dataValue,
+              },
+              hmac: hmacValue,
+            }
+          }
         },
       }),
     });
-    console.log("Aadhar details:",response)
+    console.log("Aadhar details:", JSON.stringify(response, null, 2))
+    try {
+      const encryptedXml =
+        ((response as any)?.response?.response?.encryptedXML as string | undefined) ??
+        ((response as any)?.response?.encryptedXML as string | undefined);
+
+      if (encryptedXml) {
+        const xml = await decryptEkycValue(encryptedXml);
+        const parsed = tryParseUidaiKycXml(xml);
+        (response as any).decryptedKyc = { xml, ...(parsed ?? {}) };
+        (response as any).response = {
+          ...(isPlainObject((response as any).response) ? (response as any).response : {}),
+          decryptedKyc: parsed ?? undefined,
+        };
+      }
+    } catch (error) {
+      console.warn('[esaf-leads] failed to decrypt Aadhaar encryptedXML', error);
+    }
+    
+    console.log("Aadhar details DECYPTED:", JSON.stringify(response, null, 2))
+
     return response;
 
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype;
 }

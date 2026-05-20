@@ -13,9 +13,15 @@ export type CreateLeadParams = {
 
   // Permanent address (Aadhaar e-KYC)
   permanentAddressStreet?: string;
+  permanentAddressCountryCode?: string;
+  permanentAddressStateCode?: string;
+  permanentAddressCityCode?: string;
   permanentAddressPostalCode?: string;
 
   // Communication address (Aadhaar e-KYC)
   communicationAddressStreet?: string;
+  communicationAddressCountryCode?: string;
+  communicationAddressStateCode?: string;
+  communicationAddressCityCode?: string;
   communicationAddressPostalCode?: string;
 };
