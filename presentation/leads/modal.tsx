@@ -25,6 +25,7 @@ import { useGenerateAadhaarOtpMutation } from '@/hooks/use-generate-aadhaar-otp'
 import { useFetchAadhaarDetailsMutation } from '@/hooks/use-fetch-aadhaar-details';
 import { useValidatePanMutation } from '@/hooks/use-validate-pan';
 import { log } from '@/core/utils/logger';
+import { normalizeMobileNumber } from '@/core/utils/mobile';
 import { encryptAadhaarUid } from '@/core/ekyc/aadhaar-crypto';
 import { generateUidaiOtpAuthBlock } from '@/core/ekyc/uidai-pidblock';
 import {
@@ -123,9 +124,10 @@ export function NewLeadModalScreen() {
       : Array.isArray(params.mobile)
         ? params.mobile[0] ?? ''
         : '';
+  const normalizedInitialMobile = normalizeMobileNumber(initialMobile);
 
   const [step, setStep] = useState<Step>(1);
-  const [mobile, setMobile] = useState(initialMobile);
+  const [mobile, setMobile] = useState(normalizedInitialMobile);
   const [leadSource, setLeadSource] = useState('Select source');
   const [leadSourceOpen, setLeadSourceOpen] = useState(false);
   const [incomeBand, setIncomeBand] = useState('Select band');
@@ -173,10 +175,10 @@ export function NewLeadModalScreen() {
   const identityOtpScrollHandled = useRef(false);
 
   useEffect(() => {
-    if (initialMobile) {
-      setMobile(initialMobile);
+    if (normalizedInitialMobile) {
+      setMobile(normalizedInitialMobile);
     }
-  }, [initialMobile]);
+  }, [normalizedInitialMobile]);
 
   const canSendOtp = consents.every(Boolean) && mobile.trim().length === 10;
   const otpComplete = otpDigits.every((digit) => digit.length === 1);

@@ -13,6 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Lead } from '@/domain/leads/lead';
 import { globalStyles } from '@/theme/globalStyles';
 import { Fonts } from '@/theme/theme';
+import { normalizeMobileNumber } from '@/core/utils/mobile';
 
 type RouteParam = string | string[] | undefined;
 
@@ -116,7 +117,7 @@ export default function LeadDetailsScreen() {
             onPress={() => {
               router.push({
                 pathname: '/modal',
-                params: { mobile },
+                params: { mobile: normalizeMobileNumber(mobile) },
               });
             }}>
             <Text style={styles.secondaryButtonText}>Create New Lead (Different Product)</Text>
