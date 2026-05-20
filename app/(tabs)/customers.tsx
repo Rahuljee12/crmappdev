@@ -20,23 +20,49 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFindCustomerMutation } from '@/hooks/use-find-customer';
 import { leadUseCases } from '@/application/di/app-dependencies';
 import type { Lead } from '@/domain/leads/lead';
+import { digitsOnly, mobileMatches, normalizeMobileNumber } from '@/core/utils/mobile';
+import { newLeadModalArgs } from '@/core/navigation/lead.routes';
 
 type SearchState =
   | 'idle'
   | 'searching'
   | 'empty';
 
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, '').slice(0, 10);
-}
-
 function encodeLeads(leads: Lead[]) {
   return encodeURIComponent(JSON.stringify(leads.slice(0, 2)));
 }
 
-function leadMatchesMobile(lead: Lead, mobileNumber: string) {
-  const leadMobile = digitsOnly(lead.mobile);
-  return Boolean(leadMobile) && leadMobile.endsWith(mobileNumber);
+async function fetchLeadsForMobile(mobileNumber: string) {
+  const normalized = normalizeMobileNumber(mobileNumber);
+  const criteria = [normalized, `91${normalized}`];
+  const seen = new Set<string>();
+  const results: Lead[] = [];
+
+  for (const candidate of criteria) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    try {
+      const fetched = await leadUseCases.listLeads.execute({
+        mobileNumber: candidate,
+      });
+
+      for (const lead of fetched) {
+        if (mobileMatches(lead.mobile, normalized)) {
+          results.push(lead);
+        }
+      }
+    } catch {
+      // Ignore and try the next format.
+    }
+  }
+
+  const uniqueById = new Map<string, Lead>();
+  for (const lead of results) {
+    uniqueById.set(lead.id, lead);
+  }
+
+  return [...uniqueById.values()];
 }
 
 export default function CustomersScreen() {
@@ -99,33 +125,22 @@ export default function CustomersScreen() {
           return;
         }
 
-        const newCustomer = customers.find((customer) => Number(customer.matchCount) <= 0);
-
         if (!etbCustomer) {
+          const leads = await fetchLeadsForMobile(formattedMobile);
+
+          if (leads.length > 0) {
+            router.replace({
+              pathname: '/lead-details',
+              params: {
+                mobile: formattedMobile,
+                leads: encodeLeads(leads),
+              },
+            });
+            return;
+          }
+
+          const newCustomer = customers.find((customer) => Number(customer.matchCount) <= 0);
           if (newCustomer) {
-            let leads: Lead[] = [];
-            try {
-              const fetchedLeads = await leadUseCases.listLeads.execute({
-                mobileNumber: `91${formattedMobile}`,
-              });
-              leads = fetchedLeads.filter((lead) =>
-                leadMatchesMobile(lead, formattedMobile)
-              );
-            } catch {
-              leads = [];
-            }
-
-            if (leads.length > 0) {
-              router.replace({
-                pathname: '/lead-details',
-                params: {
-                  mobile: formattedMobile,
-                  leads: encodeLeads(leads),
-                },
-              });
-              return;
-            }
-
             router.replace({
               pathname: '/new-customer',
               params: {
@@ -245,7 +260,13 @@ export default function CustomersScreen() {
             ]}>
             <TouchableOpacity
               style={styles.primaryButton}
-              onPress={() => router.push('/modal')}>
+              onPress={() =>
+                router.push(
+                  newLeadModalArgs({
+                    mobile: formattedMobile,
+                  }),
+                )
+              }>
               <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
               <Text style={styles.primaryButtonText}>Create New Lead</Text>
             </TouchableOpacity>

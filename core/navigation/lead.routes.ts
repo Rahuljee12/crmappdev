@@ -1,10 +1,13 @@
 export const leadModalPath = '/modal' as const;
 
+export type LeadModalParams = {
+  mobile?: string;
+  product?: string;
+};
 
-export function newLeadModalArgs(): {
+export function newLeadModalArgs(params?: LeadModalParams): {
   pathname: typeof leadModalPath;
-  params?: Record<string, never>;
+  params?: LeadModalParams;
 } {
-  return { pathname: leadModalPath };
+  return params ? { pathname: leadModalPath, params } : { pathname: leadModalPath };
 }
-

@@ -17,6 +17,8 @@ import { leadUseCases } from '@/application/di/app-dependencies';
 import type { Lead } from '@/domain/leads/lead';
 import { globalStyles } from '@/theme/globalStyles';
 import { Fonts } from '@/theme/theme';
+import { mobileMatches, normalizeMobileNumber } from '@/core/utils/mobile';
+import { newLeadModalArgs } from '@/core/navigation/lead.routes';
 
 type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
 
@@ -49,13 +51,37 @@ function initialsFromName(name: string) {
     .join('');
 }
 
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, '');
-}
+async function fetchLeadsForMobile(mobileNumber: string) {
+  const normalized = normalizeMobileNumber(mobileNumber);
+  const criteria = [normalized, `91${normalized}`];
+  const seen = new Set<string>();
+  const results: Lead[] = [];
 
-function leadMatchesMobile(lead: Lead, mobileNumber: string) {
-  const leadMobile = digitsOnly(lead.mobile);
-  return Boolean(leadMobile) && leadMobile.endsWith(mobileNumber);
+  for (const candidate of criteria) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    try {
+      const fetched = await leadUseCases.listLeads.execute({
+        mobileNumber: candidate,
+      });
+
+      for (const lead of fetched) {
+        if (mobileMatches(lead.mobile, normalized)) {
+          results.push(lead);
+        }
+      }
+    } catch {
+      // Ignore and try the next format.
+    }
+  }
+
+  const uniqueById = new Map<string, Lead>();
+  for (const lead of results) {
+    uniqueById.set(lead.id, lead);
+  }
+
+  return [...uniqueById.values()];
 }
 
 export default function CustomerDetailsScreen() {
@@ -128,7 +154,7 @@ export default function CustomerDetailsScreen() {
       return;
     }
 
-    const mobileNumber = digitsOnly(customerPhone);
+    const mobileNumber = normalizeMobileNumber(customerPhone);
     if (!mobileNumber) {
       setLeadsLoaded(true);
       return;
@@ -138,14 +164,10 @@ export default function CustomerDetailsScreen() {
     setLeadsLoading(true);
     setLeads([]);
 
-    leadUseCases.listLeads.execute({ mobileNumber: `91${mobileNumber}` })
+    fetchLeadsForMobile(customerPhone)
       .then((items) => {
         if (!cancelled) {
-          setLeads(
-            items
-              .filter((lead) => leadMatchesMobile(lead, mobileNumber))
-              .slice(0, 2)
-          );
+          setLeads(items.slice(0, 2));
           setLeadsLoaded(true);
         }
       })
@@ -319,7 +341,13 @@ export default function CustomerDetailsScreen() {
           ]}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => router.push('/modal')}>
+            onPress={() =>
+              router.push(
+                newLeadModalArgs({
+                  mobile: normalizeMobileNumber(customerPhone),
+                }),
+              )
+            }>
             <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
             <Text style={styles.primaryButtonText}>Create New Lead</Text>
           </TouchableOpacity>
