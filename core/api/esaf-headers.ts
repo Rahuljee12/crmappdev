@@ -8,7 +8,9 @@ export function buildEsafHeaders(params: {
 }) {
   const channel = params.channel ?? ESAF_DEFAULT_CHANNEL;
   const externalReferenceNumber =
-    params.externalReferencePrefix ?? 'API-12309946299324567-122880';
+    params.externalReferenceNumber ??
+    params.externalReferencePrefix ??
+    'API-12309946299324567-122880';
 
   const headers: Record<string, string> = {
     channel,
