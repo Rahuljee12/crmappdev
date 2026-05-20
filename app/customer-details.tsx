@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { leadUseCases } from '@/application/di/app-dependencies';
+import { customerUseCases, leadUseCases } from '@/application/di/app-dependencies';
+import type { CustomerAccount } from '@/domain/customers/customer-account';
 import type { Lead } from '@/domain/leads/lead';
 import { globalStyles } from '@/theme/globalStyles';
 import { Fonts } from '@/theme/theme';
 import { mobileMatches, normalizeMobileNumber } from '@/core/utils/mobile';
 import { newLeadModalArgs } from '@/core/navigation/lead.routes';
+import { accountDetailsArgs } from '@/core/navigation/account.routes';
 
 type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
 
@@ -49,6 +51,21 @@ function initialsFromName(name: string) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
+}
+
+function maskAccountId(accountId: string) {
+  const compact = accountId.trim().replace(/\s+/g, '');
+  const lastFour = compact.slice(-4);
+
+  if (!lastFour) {
+    return '....';
+  }
+
+  return `.... ${lastFour}`;
+}
+
+function normalizeAccountId(accountId: string) {
+  return accountId.trim().replace(/\s+/g, '');
 }
 
 async function fetchLeadsForMobile(mobileNumber: string) {
@@ -98,56 +115,81 @@ export default function CustomerDetailsScreen() {
   }>();
 
   const [activeTab, setActiveTab] = useState<CustomerTab>('Accounts');
+  const [accounts, setAccounts] = useState<CustomerAccount[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [leadsLoaded, setLeadsLoaded] = useState(false);
 
   const customerName = firstParam(params.name) || 'Customer';
   const customerPhone = firstParam(params.phone1) || '—';
+  const customerId = firstParam(params.customerId);
   const customerIdentifier =
-    firstParam(params.customerId) ||
+    customerId ||
     firstParam(params.ucic) ||
     '—';
 
-  const tabContent = useMemo<CardItem[]>(() => {
-    if (activeTab === 'Insights') {
-      return [
-        {
-          icon: 'sparkles-outline' as const,
-          iconBackground: '#EEF2FF',
-          iconColor: '#1E3A8A',
-          title: 'Savings account has no nominee',
-        },
-        {
-          icon: 'sparkles-outline' as const,
-          iconBackground: '#EEF2FF',
-          iconColor: '#1E3A8A',
-          title: 'FD maturing soon',
-        },
-      ];
-    }
-
+  const insightCards = useMemo<CardItem[]>(() => {
     return [
       {
-        icon: 'wallet-outline' as const,
+        icon: 'sparkles-outline' as const,
         iconBackground: '#EEF2FF',
         iconColor: '#1E3A8A',
-          title: 'Savings Account',
-        subtitle: '•••• 4421',
-        badge: 'Active',
-        badgeVariant: 'green',
+        title: 'Savings account has no nominee',
       },
       {
-        icon: 'cash-outline' as const,
+        icon: 'sparkles-outline' as const,
         iconBackground: '#EEF2FF',
         iconColor: '#1E3A8A',
-        title: 'Fixed Deposit',
-        subtitle: '•••• 7781',
-        badge: 'Matures 2027',
-        badgeVariant: 'green',
+        title: 'FD maturing soon',
       },
     ];
-  }, [activeTab]);
+  }, []);
+
+  useEffect(() => {
+    setAccounts([]);
+    setAccountsLoaded(false);
+  }, [customerId]);
+
+  useEffect(() => {
+    if (activeTab !== 'Accounts' || accountsLoaded) {
+      return;
+    }
+
+    if (!customerId) {
+      setAccountsLoaded(true);
+      return;
+    }
+
+    let cancelled = false;
+    setAccountsLoading(true);
+    setAccounts([]);
+
+    customerUseCases
+      .listCustomerAccounts.execute(customerId)
+      .then((items) => {
+        if (!cancelled) {
+          setAccounts(items);
+          setAccountsLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAccounts([]);
+          setAccountsLoaded(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAccountsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, accountsLoaded, customerId]);
 
   useEffect(() => {
     if (activeTab !== 'Leads' || leadsLoaded) {
@@ -254,7 +296,75 @@ export default function CustomerDetailsScreen() {
             })}
           </View>
 
-          {activeTab === 'Leads' ? (
+          {activeTab === 'Accounts' ? (
+            <View style={styles.cardStack}>
+              {accountsLoading ? (
+                <View style={styles.emptyLeadsCard}>
+                  <ActivityIndicator size="small" color="#17307F" />
+                  <Text style={styles.emptyLeadsText}>Loading accounts...</Text>
+                </View>
+              ) : null}
+
+              {!accountsLoading && accounts.length === 0 ? (
+                <View style={styles.emptyLeadsCard}>
+                  <Text style={styles.emptyLeadsText}>No accounts found</Text>
+                </View>
+              ) : null}
+
+              {!accountsLoading
+                ? accounts.map((account, index) => (
+                    <Pressable
+                      key={`${account.productName}-${account.accountId}-${index}`}
+                      onPress={() => {
+                        const accountId = normalizeAccountId(account.accountId);
+                        if (!accountId) {
+                          return;
+                        }
+
+                        router.push(
+                          accountDetailsArgs({
+                            customerId: customerId || undefined,
+                            accountId,
+                            productName: account.productName,
+                          }),
+                        );
+                      }}
+                      style={({ pressed }) => [
+                        styles.dataCard,
+                        styles.accountCardPressable,
+                        pressed && styles.accountCardPressed,
+                      ]}>
+                      <View style={[styles.iconWrap, { backgroundColor: '#EEF2FF' }]}>
+                        <Ionicons name="wallet-outline" size={24} color="#1E3A8A" />
+                      </View>
+
+                      <View style={styles.cardBody}>
+                        <Text style={styles.cardTitle}>{account.productName}</Text>
+                        <Text style={styles.cardSubtitle}>{maskAccountId(account.accountId)}</Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.badge,
+                          account.badgeVariant === 'amber'
+                            ? styles.badgeAmber
+                            : styles.badgeGreen,
+                        ]}>
+                        <Text
+                          style={[
+                            styles.badgeText,
+                            account.badgeVariant === 'amber'
+                              ? styles.badgeTextAmber
+                              : styles.badgeTextGreen,
+                          ]}>
+                          {account.badge}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ))
+                : null}
+            </View>
+          ) : activeTab === 'Leads' ? (
             <View style={styles.cardStack}>
               {leadsLoading ? (
                 <View style={styles.emptyLeadsCard}>
@@ -290,7 +400,7 @@ export default function CustomerDetailsScreen() {
             </View>
           ) : (
             <View style={styles.cardStack}>
-              {tabContent.map((item) => (
+              {insightCards.map((item) => (
                 <View key={item.title} style={styles.dataCard}>
                   <View
                     style={[
@@ -585,6 +695,15 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 4 },
     elevation: 1,
+  },
+
+  accountCardPressable: {
+    overflow: 'hidden',
+  },
+
+  accountCardPressed: {
+    transform: [{ scale: 0.99 }],
+    opacity: 0.96,
   },
 
   iconWrap: {

@@ -229,6 +229,30 @@ export default function CustomersScreen() {
                 {findCustomer.isPending ? 'Searching…' : 'Search'}
               </Text>
             </TouchableOpacity>
+
+            <View style={styles.testNumbersCard}>
+              <View style={styles.testNumbersHeader}>
+                <View style={styles.testNumbersIcon}>
+                  <Ionicons name="information-circle-outline" size={18} color="#1E3A8A" />
+                </View>
+                <Text style={styles.testNumbersTitle}>Test Numbers</Text>
+              </View>
+
+              <View style={styles.testNumbersRow}>
+                <Text style={styles.testNumbersLabel}>8310266934</Text>
+                <Text style={styles.testNumbersValue}>Existing Customer</Text>
+              </View>
+
+              <View style={styles.testNumbersRow}>
+                <Text style={styles.testNumbersLabel}>9818236318</Text>
+                <Text style={styles.testNumbersValue}>NTB Lead</Text>
+              </View>
+
+              <View style={styles.testNumbersRow}>
+                <Text style={styles.testNumbersLabel}>Any other</Text>
+                <Text style={styles.testNumbersValue}>New Prospect</Text>
+              </View>
+            </View>
           </View>
 
           {searchState === 'searching' ? (
@@ -360,6 +384,64 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+
+  testNumbersCard: {
+    marginTop: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 16,
+    gap: 12,
+    shadowColor: '#94A3B8',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1,
+  },
+
+  testNumbersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  testNumbersIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  testNumbersTitle: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  testNumbersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+
+  testNumbersLabel: {
+    flex: 1,
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  testNumbersValue: {
+    flex: 1,
+    textAlign: 'right',
+    color: '#6B7280',
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   successBanner: {
