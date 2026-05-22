@@ -34,14 +34,17 @@ export type CreateSrParams =
       type: 'PAN_UPDATION';
       cifId: string;
       panNumber: string;
+      document: SrDocument;
     }
   | {
       type: 'AADHAAR_UPDATION';
       cifId: string;
       aadhaarNumber: string;
+      document: SrDocument;
     }
   | {
       type: 'ISSUE_CERTIFICATE_UPDATION';
       cifId: string;
       certificateRef: string;
+      document: SrDocument;
     };
