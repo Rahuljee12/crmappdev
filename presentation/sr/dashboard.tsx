@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -10,8 +10,13 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { useCreateSrMutation } from '@/hooks/use-create-sr';
+import type { CreateSrParams } from '@/domain/sr/create-sr-params';
 
 type SRItem = {
   id: string;
@@ -23,7 +28,14 @@ type SRItem = {
   status: 'Open' | 'In Progress' | 'Completed' | 'Rejected';
 };
 
-const serviceTypes = ['PAN Update', 'Address Change', 'Cheque Book Request', 'Mobile Number Update'];
+const serviceTypes: { label: string; value: CreateSrParams['type'] }[] = [
+  { label: 'Mobile Number Update', value: 'MOBILE_NUMBER_UPDATE' },
+  { label: 'Issue New Debit Card', value: 'DEBIT_CARD_NEW' },
+  { label: 'Cheque Book Request', value: 'CHEQUE_BOOK_REQUEST' },
+  { label: 'PAN Updation', value: 'PAN_UPDATION' },
+  { label: 'Aadhaar Updation', value: 'AADHAAR_UPDATION' },
+  { label: 'Issue Certificate Updation', value: 'ISSUE_CERTIFICATE_UPDATION' },
+];
 
 const initialRequests: SRItem[] = [
   {
@@ -89,39 +101,122 @@ const statusStyles: Record<SRItem['status'], { bg: string; fg: string }> = {
   Rejected: { bg: '#FDECEC', fg: '#B42318' },
 };
 
-function formatNextSr(existing: SRItem[]) {
+function pad2(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function formatMonthCode(now = new Date()) {
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = pad2(now.getMonth() + 1);
+  return `${yy}${mm}`;
+}
+
+function formatReferenceNumber(params: { dateCreated?: string; serviceRequestNumber: string }) {
+  const digits = (params.serviceRequestNumber ?? '').replace(/\D/g, '');
+  const last3 = String(Number(digits || '0')).slice(-3).padStart(3, '0');
+  const dateCreated = params.dateCreated;
+  const monthCode = dateCreated && dateCreated.length >= 6 ? dateCreated.slice(2, 6) : formatMonthCode();
+  return `SR-${monthCode}-${last3}`;
+}
+
+function formatNextLocalSr(existing: SRItem[]) {
+  const monthCode = formatMonthCode();
   const max = existing.reduce((acc, item) => {
-    const match = item.srNo.match(/SR-(\d+)-(\d+)/);
+    const match = item.srNo.match(/SR-(\d{4})-(\d{3,4})/);
     if (!match) return acc;
+    if (match[1] !== monthCode) return acc;
     return Math.max(acc, Number(match[2]));
   }, 0);
-
-  return `SR-2410-${String(max + 1).padStart(4, '0')}`;
+  return `SR-${monthCode}-${String(max + 1).padStart(3, '0')}`;
 }
 
 export function SrDashboardScreen() {
   const [requests, setRequests] = useState(initialRequests);
-  const [view, setView] = useState<'list' | 'create'>('list');
+  const [view, setView] = useState<'list' | 'create' | 'success'>('list');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
-  const [selectedType, setSelectedType] = useState(serviceTypes[0]);
+  const [selectedType, setSelectedType] = useState(serviceTypes[0]!);
   const [mobileNumber, setMobileNumber] = useState('');
   const [cifNumber, setCifNumber] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [remarks, setRemarks] = useState('');
-  const tabBarHeight = useBottomTabBarHeight();
+  const [srFieldValue, setSrFieldValue] = useState('');
+  const [showFieldMenu, setShowFieldMenu] = useState(false);
+  const [successRef, setSuccessRef] = useState<string | null>(null);
+  const [uploadedDoc, setUploadedDoc] = useState<{
+    uri: string;
+    fileName: string;
+    base64: string;
+  } | null>(null);
+  const insets = useSafeAreaInsets();
+  const createSr = useCreateSrMutation();
 
   const srCount = requests.length;
-  const latestSr = useMemo(() => formatNextSr(requests), [requests]);
-  const bottomSpacing = tabBarHeight + 24;
+  const latestSr = useMemo(() => formatNextLocalSr(requests), [requests]);
+  const bottomSpacing = (insets.bottom || 0) + 24;
+  const fabBottomSpacing = (insets.bottom || 0) + 10 + 88 + 16;
 
   const resetForm = useCallback(() => {
     setMobileNumber('');
     setCifNumber('');
     setAccountNumber('');
     setRemarks('');
-    setSelectedType(serviceTypes[0]);
+    setSelectedType(serviceTypes[0]!);
     setShowTypeMenu(false);
+    setSrFieldValue('');
+    setShowFieldMenu(false);
+    setSuccessRef(null);
+    setUploadedDoc(null);
   }, []);
+
+  const prepareBase64Image = async (asset: ImagePicker.ImagePickerAsset) => {
+    const maxDimension = 1600;
+    const width = asset.width ?? 0;
+    const height = asset.height ?? 0;
+    const scale = width && height ? Math.min(1, maxDimension / Math.max(width, height)) : 1;
+    const targetWidth = width && scale < 1 ? Math.round(width * scale) : undefined;
+    const targetHeight = height && scale < 1 ? Math.round(height * scale) : undefined;
+
+    const result = await manipulateAsync(
+      asset.uri,
+      targetWidth && targetHeight ? [{ resize: { width: targetWidth, height: targetHeight } }] : [],
+      { compress: 0.9, format: SaveFormat.JPEG, base64: true },
+    );
+
+    if (!result.base64) throw new Error('Unable to read image as base64');
+
+    const fileName = asset.fileName || `document-${Date.now()}.jpg`;
+    setUploadedDoc({ uri: result.uri, fileName, base64: result.base64 });
+  };
+
+  const pickFromGallery = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission required', 'Allow photo library access to upload documents.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+      allowsEditing: true,
+    });
+    if (res.canceled) return;
+    const asset = res.assets?.[0];
+    if (!asset) return;
+    await prepareBase64Image(asset);
+  };
+
+  const captureWithCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert('Permission required', 'Allow camera access to capture documents.');
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({ quality: 1, allowsEditing: true });
+    if (res.canceled) return;
+    const asset = res.assets?.[0];
+    if (!asset) return;
+    await prepareBase64Image(asset);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -136,12 +231,119 @@ export function SrDashboardScreen() {
   };
 
   const handleSubmit = () => {
+    const mobileNo = mobileNumber.trim();
+    const cifId = cifNumber.trim();
+    const accNo = accountNumber.trim();
+    if (!mobileNo && !cifId && !accNo) {
+      Alert.alert('Missing details', 'Provide at least one: Mobile, CIF or Account number.');
+      return;
+    }
+
+    if (
+      selectedType.value === 'PAN_UPDATION' ||
+      selectedType.value === 'AADHAAR_UPDATION' ||
+      selectedType.value === 'ISSUE_CERTIFICATE_UPDATION'
+    ) {
+      if (!cifId) {
+        Alert.alert('Missing CIF', 'CIF Number is required for this service request.');
+        return;
+      }
+      const refValue = srFieldValue.trim();
+      if (!refValue) {
+        Alert.alert('Missing details', `Enter ${srFieldConfig.label}.`);
+        return;
+      }
+      // if (!uploadedDoc?.base64 || !uploadedDoc.fileName) {
+      //   Alert.alert('Document required', 'Capture or upload an image before submitting.');
+      //   return;
+      // }
+        // document: { fileName: uploadedDoc.fileName, fileContentBase64: uploadedDoc.base64 },
+
+      const common = {
+        cifId
+      } as const;
+
+      const params: CreateSrParams =
+        selectedType.value === 'PAN_UPDATION'
+          ? { type: 'PAN_UPDATION', ...common, panNumber: refValue }
+          : selectedType.value === 'AADHAAR_UPDATION'
+            ? { type: 'AADHAAR_UPDATION', ...common, aadhaarNumber: refValue }
+            : { type: 'ISSUE_CERTIFICATE_UPDATION', ...common, certificateRef: refValue };
+
+      createSr.mutate(params, {
+        onSuccess: (result) => {
+          const srNo = formatReferenceNumber({
+            dateCreated: result.dateCreated,
+            serviceRequestNumber: result.serviceRequestNumber,
+          });
+
+          const newRequest: SRItem = {
+            id: `${Date.now()}`,
+            srNo,
+            customer: 'New Customer',
+            phone: mobileNumber || '+91 -',
+            type: selectedType.label,
+            date: 'Just now',
+            status: 'Open',
+          };
+
+          setRequests((current) => [newRequest, ...current]);
+          setSuccessRef(srNo);
+          setView('success');
+        },
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : 'Please try again.';
+          Alert.alert('Service request failed', message);
+        },
+      });
+      return;
+    }
+
+    if (selectedType.value === 'CHEQUE_BOOK_REQUEST') {
+      const noOfLeaves = (srFieldValue.trim() as '10' | '25' | '50' | '100') || '10';
+      createSr.mutate(
+        {
+          type: 'CHEQUE_BOOK_REQUEST',
+          accountNumber: "53240002254206",
+          cifId,
+          noOfLeaves,
+        },
+        {
+          onSuccess: (result) => {
+            const srNo = formatReferenceNumber({
+              dateCreated: result.dateCreated,
+              serviceRequestNumber: result.serviceRequestNumber,
+            });
+
+            const newRequest: SRItem = {
+              id: `${Date.now()}`,
+              srNo,
+              customer: 'New Customer',
+              phone: mobileNumber || '+91 -',
+              type: 'Cheque Book Request',
+              date: 'Just now',
+              status: 'Open',
+            };
+
+            setRequests((current) => [newRequest, ...current]);
+            setSuccessRef(srNo);
+            setView('success');
+          },
+          onError: (error) => {
+            const message = error instanceof Error ? error.message : 'Please try again.';
+            Alert.alert('Service request failed', message);
+          },
+        },
+      );
+      return;
+    }
+
     const newRequest: SRItem = {
       id: `${Date.now()}`,
       srNo: latestSr,
       customer: 'New Customer',
       phone: mobileNumber || '+91 -',
-      type: selectedType,
+      type: selectedType.label,
       date: 'Just now',
       status: 'Open',
     };
@@ -150,6 +352,71 @@ export function SrDashboardScreen() {
     resetForm();
     setView('list');
   };
+
+  const srFieldConfig = useMemo(() => {
+    if (selectedType.value === 'MOBILE_NUMBER_UPDATE') {
+      return { label: 'New mobile number', kind: 'text' as const, keyboardType: 'number-pad' as const, options: [] as string[] };
+    }
+    if (selectedType.value === 'DEBIT_CARD_NEW') {
+      return { label: 'Card variant', kind: 'select' as const, keyboardType: 'default' as const, options: ['Classic', 'Platinum', 'Business'] };
+    }
+    if (selectedType.value === 'CHEQUE_BOOK_REQUEST') {
+      return { label: 'Number of leaves', kind: 'select' as const, keyboardType: 'default' as const, options: ['10', '25', '50', '100'] };
+    }
+    if (selectedType.value === 'PAN_UPDATION') {
+      return { label: 'PAN Number', kind: 'text' as const, keyboardType: 'default' as const, options: [] as string[] };
+    }
+    if (selectedType.value === 'AADHAAR_UPDATION') {
+      return { label: 'Aadhaar Number', kind: 'text' as const, keyboardType: 'number-pad' as const, options: [] as string[] };
+    }
+    if (selectedType.value === 'ISSUE_CERTIFICATE_UPDATION') {
+      return { label: 'Certificate Reference', kind: 'text' as const, keyboardType: 'default' as const, options: [] as string[] };
+    }
+    return { label: 'Request detail', kind: 'text' as const, keyboardType: 'default' as const, options: [] as string[] };
+  }, [selectedType.value]);
+
+  React.useEffect(() => {
+    if (srFieldValue) return;
+    if (selectedType.value === 'CHEQUE_BOOK_REQUEST') setSrFieldValue('10');
+    if (selectedType.value === 'DEBIT_CARD_NEW') setSrFieldValue('Classic');
+  }, [selectedType.value, srFieldValue]);
+
+  if (view === 'success') {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
+        
+        <View style={[styles.formScreen, { paddingBottom: bottomSpacing }]}>
+          <View style={styles.successIconWrap}>
+            <View style={styles.successIconCircle}>
+              <Ionicons name="checkmark" size={44} color="#0F7A3A" />
+            </View>
+          </View>
+
+          <Text style={styles.successTitle}>Service Request Created Successfully</Text>
+          <Text style={styles.successSubtitle}>Reference Number</Text>
+          <Text style={styles.successRef}>{successRef ?? 'SR-—'}</Text>
+
+          <Pressable
+            style={[styles.submitButton, { marginTop: 28 }]}
+            onPress={() => {
+              resetForm();
+              setView('create');
+            }}>
+            <Text style={styles.submitButtonText}>Create Another</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={() => {
+              resetForm();
+              setView('list');
+            }}>
+            <Text style={styles.secondaryButtonText}>Go to Service Requests</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (view === 'create') {
     return (
@@ -211,14 +478,88 @@ export function SrDashboardScreen() {
             <Text style={styles.cardTitle}>Service Request Type</Text>
             <Text style={styles.cardSubtitle}>Select Service Request Type</Text>
             <Pressable style={styles.selectField} onPress={() => setShowTypeMenu(true)}>
-              <Text style={styles.selectValue}>{selectedType}</Text>
+              <Text style={styles.selectValue}>{selectedType.label}</Text>
               <Ionicons name="chevron-down" size={20} color="#1B348B" />
             </Pressable>
           </View>
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Additional Details</Text>
-            <Text style={styles.fieldLabel}>Remarks</Text>
+            <Text style={styles.fieldLabel}>{srFieldConfig.label}</Text>
+            {srFieldConfig.kind === 'select' ? (
+              <Pressable style={styles.selectField} onPress={() => setShowFieldMenu(true)}>
+                <Text style={styles.selectValue}>{srFieldValue || 'Select'}</Text>
+                <Ionicons name="chevron-down" size={20} color="#1B348B" />
+              </Pressable>
+            ) : (
+              <TextInput
+                style={styles.input}
+                placeholder="Enter value"
+                placeholderTextColor="#8090B0"
+                value={srFieldValue}
+                onChangeText={setSrFieldValue}
+                keyboardType={srFieldConfig.keyboardType}
+              />
+            )}
+
+            {(selectedType.value === 'PAN_UPDATION' ||
+              selectedType.value === 'AADHAAR_UPDATION' ||
+              selectedType.value === 'ISSUE_CERTIFICATE_UPDATION') ? (
+              <View style={{ marginTop: 14 }}>
+                <Text style={styles.fieldLabel}>Upload document image</Text>
+
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                  <Pressable
+                    style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]}
+                    onPress={() => {
+                      captureWithCamera().catch((e) => {
+                        const message = e instanceof Error ? e.message : 'Please try again.';
+                        Alert.alert('Camera failed', message);
+                      });
+                    }}>
+                    <Text style={styles.secondaryButtonText}>Capture</Text>
+                  </Pressable>
+
+                  <Pressable
+                    style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]}
+                    onPress={() => {
+                      pickFromGallery().catch((e) => {
+                        const message = e instanceof Error ? e.message : 'Please try again.';
+                        Alert.alert('Upload failed', message);
+                      });
+                    }}>
+                    <Text style={styles.secondaryButtonText}>Upload</Text>
+                  </Pressable>
+                </View>
+
+                {uploadedDoc ? (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ color: '#0F172A', fontWeight: '700' }}>{uploadedDoc.fileName}</Text>
+                    <View
+                      style={{
+                        marginTop: 8,
+                        borderRadius: 12,
+                        overflow: 'hidden',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}>
+                      <Image
+                        source={{ uri: uploadedDoc.uri }}
+                        style={{ width: '100%', height: 180 }}
+                        resizeMode="cover"
+                      />
+                    </View>
+                    <Pressable
+                      style={[styles.secondaryButton, { marginTop: 10 }]}
+                      onPress={() => setUploadedDoc(null)}>
+                      <Text style={styles.secondaryButtonText}>Remove</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
+            <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Remarks</Text>
             <TextInput
               style={styles.textArea}
               placeholder="Add notes for this request"
@@ -230,8 +571,10 @@ export function SrDashboardScreen() {
             />
           </View>
 
-          <Pressable style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Submit Service Request</Text>
+          <Pressable style={[styles.submitButton, {marginBottom: bottomSpacing}]} onPress={handleSubmit} disabled={createSr.isPending}>
+            <Text style={styles.submitButtonText}>
+              {createSr.isPending ? 'Submitting…' : 'Submit Service Request'}
+            </Text>
           </Pressable>
         </ScrollView>
 
@@ -241,13 +584,34 @@ export function SrDashboardScreen() {
               <Text style={styles.modalTitle}>Choose request type</Text>
               {serviceTypes.map((type) => (
                 <Pressable
-                  key={type}
+                  key={type.value}
                   style={styles.modalOption}
                   onPress={() => {
                     setSelectedType(type);
                     setShowTypeMenu(false);
+                    setSrFieldValue('');
+                    setUploadedDoc(null);
                   }}>
-                  <Text style={styles.modalOptionText}>{type}</Text>
+                  <Text style={styles.modalOptionText}>{type.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Pressable>
+        </Modal>
+
+        <Modal visible={showFieldMenu} transparent animationType="fade" onRequestClose={() => setShowFieldMenu(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowFieldMenu(false)}>
+            <View style={styles.modalSheet}>
+              <Text style={styles.modalTitle}>Choose {srFieldConfig.label}</Text>
+              {srFieldConfig.options.map((opt) => (
+                <Pressable
+                  key={opt}
+                  style={styles.modalOption}
+                  onPress={() => {
+                    setSrFieldValue(opt);
+                    setShowFieldMenu(false);
+                  }}>
+                  <Text style={styles.modalOptionText}>{opt}</Text>
                 </Pressable>
               ))}
             </View>
@@ -273,7 +637,7 @@ export function SrDashboardScreen() {
         </View>
 
         <ScrollView
-          contentContainerStyle={[styles.listContent, { paddingBottom: bottomSpacing + 72 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: fabBottomSpacing + 72 }]}
           showsVerticalScrollIndicator
           bounces={false}
           keyboardShouldPersistTaps="handled">
@@ -304,7 +668,7 @@ export function SrDashboardScreen() {
           <View style={styles.spacer} />
         </ScrollView>
 
-        <Pressable style={[styles.fab, { bottom: bottomSpacing }]} onPress={handleCreatePress}>
+        <Pressable style={[styles.fab, { bottom: fabBottomSpacing }]} onPress={handleCreatePress}>
           <Ionicons name="add" size={26} color="#FFFFFF" />
           <Text style={styles.fabText}>New SR</Text>
         </Pressable>
@@ -609,6 +973,57 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
+  },
+  secondaryButton: {
+    minHeight: 62,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D7DEEA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  secondaryButtonText: {
+    color: '#142A60',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  successIconWrap: {
+    marginTop: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successIconCircle: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(15, 122, 58, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successTitle: {
+    marginTop: 22,
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#142A60',
+    textAlign: 'center',
+    paddingHorizontal: 22,
+  },
+  successSubtitle: {
+    marginTop: 18,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#61729A',
+    textAlign: 'center',
+  },
+  successRef: {
+    marginTop: 10,
+    fontSize: 30,
+    fontWeight: '900',
+    color: '#142A60',
+    textAlign: 'center',
+    letterSpacing: 0.4,
   },
   modalBackdrop: {
     flex: 1,

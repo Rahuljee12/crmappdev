@@ -1,9 +1,3 @@
-import {
-  DarkTheme,
-  DefaultTheme,
-  ThemeProvider,
-} from '@react-navigation/native';
-
 import { Stack } from 'expo-router';
 
 import { StatusBar } from 'expo-status-bar';
@@ -18,7 +12,7 @@ import { globalStyles } from '@/theme/globalStyles';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-import logo from '@/assets/images/icon.png';
+import logo from '@/assets/images/appicon.png';
 import { queryClient } from '@/core/query/query-client';
 import { usePrefetchAuthToken } from '@/hooks/use-prefetch-auth-token';
 import { initializeEkycAesKeyFromBootstrapEnv } from '@/core/security/ekyc-init';
@@ -56,13 +50,7 @@ function AppContent() {
   const colorScheme = useColorScheme();
 
   return (
-    <ThemeProvider
-      value={
-        colorScheme === 'dark'
-          ? DarkTheme
-          : DefaultTheme
-      }>
-
+    <>
       <Stack
         screenOptions={{
           animation: 'slide_from_right',
@@ -114,8 +102,8 @@ function AppContent() {
         />
       </Stack>
 
-      <StatusBar style="dark" />
-    </ThemeProvider>
+      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+    </>
   );
 }
 

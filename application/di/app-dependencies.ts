@@ -12,11 +12,15 @@ import { GenerateAadhaarOtp } from '@/application/leads/generate-aadhaar-otp';
 import { AuthenticateAadhaarOtp } from '@/application/leads/authenticate-aadhaar-otp';
 import { FetchAadhaarDetails } from '@/application/leads/fetch-aadhaar-details';
 import { ValidatePan } from '@/application/leads/validate-pan';
+import { CreateServiceRequest } from '@/application/sr/create-sr';
+import { EsafSrDatasource } from '@/data/datasource/esaf-sr-datasource';
+import { SrApiRepository } from '@/adapters/sr/sr-api-repository';
 
 const esafLeadsDs = new EsafLeadsDatasource();
 const leadRepo = new LeadApiRepository(esafLeadsDs);
 
 const customerRepo = new CustomerApiRepository(new EsafCustomerDatasource());
+const srRepo = new SrApiRepository(new EsafSrDatasource());
 
 export const leadUseCases = {
   listLeads: new ListLeads(leadRepo),
@@ -35,7 +39,14 @@ export const customerUseCases = {
   findCustomerByMobile: new FindCustomerByMobile(customerRepo),
 };
 
+export const srUseCases = {
+  createServiceRequest: new CreateServiceRequest(srRepo),
+};
 
 export function createLead(params: import('@/domain/leads/create-lead-params').CreateLeadParams) {
   return leadUseCases.createLead.execute(params);
+}
+
+export function createServiceRequest(params: import('@/domain/sr/create-sr-params').CreateSrParams) {
+  return srUseCases.createServiceRequest.execute(params);
 }

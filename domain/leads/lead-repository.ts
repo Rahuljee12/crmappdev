@@ -4,5 +4,5 @@ import type { LeadListCriteria } from './lead-list-criteria';
 
 export interface LeadRepository {
   listLeads(criteria: LeadListCriteria): Promise<Lead[]>;
-  createLead(params: CreateLeadParams): Promise<void>;
+  createLead(params: CreateLeadParams): Promise<string>;
 }

@@ -165,6 +165,7 @@ export function NewLeadModalScreen() {
   const [productTypeOpen, setProductTypeOpen] = useState(false);
   const [productCode, setProductCode] = useState('P101 · LALIT');
   const [productCodeOpen, setProductCodeOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const otpRefs = useRef<(TextInput | null)[]>([]);
   const identityOtpRefs = useRef<(TextInput | null)[]>([]);
@@ -201,6 +202,19 @@ export function NewLeadModalScreen() {
   const generateAadhaarOtp = useGenerateAadhaarOtpMutation();
   const fetchAadhaarDetails = useFetchAadhaarDetailsMutation();
   const validatePan = useValidatePanMutation();
+
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastMessage(message);
+    toastTimeoutRef.current = setTimeout(() => setToastMessage(null), 2200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
 
   const isAnyApiPending =
     sendOtp.isPending ||
@@ -250,11 +264,20 @@ export function NewLeadModalScreen() {
           const statusCode = (response as any)?.status?.[0]?.statusCode ?? '';
           const statusOk = !statusCode || statusCode === '000';
           // Best-effort interpretation; backend response shape may vary.
+          const output0 = (response as any)?.response?.outputData?.[0] ?? {};
+          const responseCode = (response as any)?.response?.response_Code;
           const anyTrue =
-            (response as any)?.response?.outputData?.[0]?.status === true ||
-            (response as any)?.response?.outputData?.[0]?.isValid === true ||
-            (response as any)?.response?.outputData?.[0]?.panStatus === true ||
-            (response as any)?.response?.outputData?.[0]?.panStatus === 'true';
+            output0?.status === true ||
+            output0?.isValid === true ||
+            output0?.panStatus === true ||
+            output0?.panStatus === 'true' ||
+            // New shape (as per PAN validation API):
+            // response.response_Code === "1" and outputData[0].pan_status === "E"
+            // with name/dob flags as "Y".
+            (String(responseCode ?? '') === '1' &&
+              String(output0?.pan_status ?? '').toUpperCase() === 'E' &&
+              String(output0?.name ?? '').toUpperCase() === 'Y' &&
+              String(output0?.dob ?? '').toUpperCase() === 'Y');
 
           if (statusOk && anyTrue) {
             setPanValidated(true);
@@ -356,12 +379,14 @@ export function NewLeadModalScreen() {
             : undefined),
       },
       {
-        onSuccess: () => {
-          router.back();
+        onSuccess: (message) => {
+          showToast(message || 'Lead created successfully');
+          setTimeout(() => router.back(), 700);
         },
         onError: (error) => {
           const message =
             error instanceof Error ? error.message : 'Please try again.';
+          showToast(message);
           Alert.alert('Lead creation failed', message);
         },
       },
@@ -569,6 +594,13 @@ export function NewLeadModalScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {toastMessage ? (
+        <View pointerEvents="none" style={styles.toastContainer}>
+          <View style={styles.toastBubble}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </View>
+      ) : null}
       <View style={styles.screen}>
         {isAnyApiPending ? (
           <View style={styles.apiLoaderOverlay}>
@@ -1733,6 +1765,26 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#F5F7FB',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 50,
+    alignItems: 'center',
+  },
+  toastBubble: {
+    maxWidth: 520,
+    backgroundColor: 'rgba(0,0,0,0.86)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    textAlign: 'center',
   },
   screen: {
     flex: 1,

@@ -32,6 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   return {
     ...config,
+    plugins: Array.from(
+      new Set([...(config.plugins ?? []), 'expo-status-bar']),
+    ) as ExpoConfig['plugins'],
     extra,
   };
 };

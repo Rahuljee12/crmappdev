@@ -1,3 +1,5 @@
+import { lookupByPincode } from '@/data/master/pincode-master';
+
 type PoiLike = {
   name?: string;
   gender?: string;
@@ -186,10 +188,11 @@ export function extractLeadPrefillFromAadhaarAuthenticateResponse(response: unkn
   const dob = coerceString((poi as any).dob ?? (poi as any).Dob ?? (poi as any).DOB);
   const { firstName, lastName } = nameRaw ? splitName(nameRaw) : { firstName: undefined, lastName: undefined };
 
-  // const { street, postalCode } = buildAddressLine(poa);
-  const postalCode = '560066';
-  const stateCode = "KA";//inferIndiaStateCode(coerceString((poa as any).state ?? (poa as any).State));
-  const cityCode = "560"
+  const { street, postalCode } = buildAddressLine(poa);
+  const pinHit = lookupByPincode(postalCode);
+  const stateCode =
+    pinHit?.stateCode ?? inferIndiaStateCode(coerceString((poa as any).state ?? (poa as any).State));
+  const cityCode = pinHit?.cityCode;
 
   const salutation =
     gender?.toUpperCase() === 'M'
@@ -204,12 +207,12 @@ export function extractLeadPrefillFromAadhaarAuthenticateResponse(response: unkn
     lastName,
     gender,
     dob,
-    permanentAddressStreet: 'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,', //street || undefined,
+    permanentAddressStreet: street || undefined,
     permanentAddressPostalCode: postalCode,
     permanentAddressCountryCode: 'IN',
     permanentAddressCityCode: cityCode,
     permanentAddressStateCode: stateCode,
-    communicationAddressStreet: 'Flat No. 804, Tower B, Prestige Lakeside Habitat Apartments, Varthur Main Road, Near VIBGYOR High School, Whitefield - Sarjapur Road,',//street || undefined,
+    communicationAddressStreet: street || undefined,
     communicationAddressCountryCode: 'IN',
     communicationAddressStateCode: stateCode,
     communicationAddressCityCode: cityCode,
