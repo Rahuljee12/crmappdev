@@ -100,6 +100,13 @@ function AppContent() {
             headerShown: false,
           }}
         />
+
+        <Stack.Screen
+          name="account-details"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
 
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

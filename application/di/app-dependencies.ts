@@ -4,6 +4,8 @@ import { LeadApiRepository } from '@/adapters/leads/lead-api-repository';
 import { EsafLeadsDatasource } from '@/data/datasource/esaf-leads-datasource';
 
 import { FindCustomerByMobile } from '@/application/customers/find-customer';
+import { FetchCustomerAccountDetails } from '@/application/customers/fetch-account-details';
+import { ListCustomerAccounts } from '@/application/customers/list-customer-accounts';
 import { CustomerApiRepository } from '@/adapters/customers/customer-api-repository';
 import { EsafCustomerDatasource } from '@/data/datasource/esaf-customer-datasource';
 import { SendLeadCreationOtp } from '@/application/leads/send-lead-otp';
@@ -19,7 +21,8 @@ import { SrApiRepository } from '@/adapters/sr/sr-api-repository';
 const esafLeadsDs = new EsafLeadsDatasource();
 const leadRepo = new LeadApiRepository(esafLeadsDs);
 
-const customerRepo = new CustomerApiRepository(new EsafCustomerDatasource());
+const customerDs = new EsafCustomerDatasource();
+const customerRepo = new CustomerApiRepository(customerDs);
 const srRepo = new SrApiRepository(new EsafSrDatasource());
 
 export const leadUseCases = {
@@ -37,6 +40,8 @@ export const leadUseCases = {
 
 export const customerUseCases = {
   findCustomerByMobile: new FindCustomerByMobile(customerRepo),
+  fetchCustomerAccountDetails: new FetchCustomerAccountDetails(customerDs),
+  listCustomerAccounts: new ListCustomerAccounts(customerDs),
 };
 
 export const srUseCases = {
