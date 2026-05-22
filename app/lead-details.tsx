@@ -11,6 +11,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Lead } from '@/domain/leads/lead';
+import { AppHeader } from '@/components/app-header';
 import { globalStyles } from '@/theme/globalStyles';
 import { Fonts } from '@/theme/theme';
 import { normalizeMobileNumber } from '@/core/utils/mobile';
@@ -50,8 +51,10 @@ export default function LeadDetailsScreen() {
   const leads = parseLeads(params.leads);
 
   return (
-    <SafeAreaView style={globalStyles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={globalStyles.safeArea} edges={['left', 'right']}>
       <StatusBar style="dark" />
+
+      <AppHeader />
 
       <View style={styles.screen}>
         <ScrollView

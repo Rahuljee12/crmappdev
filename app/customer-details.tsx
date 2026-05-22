@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,6 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { customerUseCases, leadUseCases } from '@/application/di/app-dependencies';
+import { AppHeader } from '@/components/app-header';
 import type { CustomerAccount } from '@/domain/customers/customer-account';
 import type { Lead } from '@/domain/leads/lead';
 import { globalStyles } from '@/theme/globalStyles';
@@ -22,19 +23,9 @@ import { mobileMatches, normalizeMobileNumber } from '@/core/utils/mobile';
 import { newLeadModalArgs } from '@/core/navigation/lead.routes';
 import { accountDetailsArgs } from '@/core/navigation/account.routes';
 
-type CustomerTab = 'Accounts' | 'Leads' | 'Insights';
+type CustomerTab = 'Accounts' | 'Leads';
 
 type RouteParam = string | string[] | undefined;
-
-type CardItem = {
-  icon: 'home-outline' | 'sparkles-outline' | 'wallet-outline' | 'cash-outline';
-  iconBackground: string;
-  iconColor: string;
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  badgeVariant?: 'amber' | 'green';
-};
 
 function firstParam(value: RouteParam) {
   if (Array.isArray(value)) {
@@ -130,23 +121,6 @@ export default function CustomerDetailsScreen() {
     firstParam(params.ucic) ||
     '—';
 
-  const insightCards = useMemo<CardItem[]>(() => {
-    return [
-      {
-        icon: 'sparkles-outline' as const,
-        iconBackground: '#EEF2FF',
-        iconColor: '#1E3A8A',
-        title: 'Savings account has no nominee',
-      },
-      {
-        icon: 'sparkles-outline' as const,
-        iconBackground: '#EEF2FF',
-        iconColor: '#1E3A8A',
-        title: 'FD maturing soon',
-      },
-    ];
-  }, []);
-
   useEffect(() => {
     setAccounts([]);
     setAccountsLoaded(false);
@@ -208,7 +182,7 @@ export default function CustomerDetailsScreen() {
     fetchLeadsForMobile(customerPhone)
       .then((items) => {
         if (!cancelled) {
-          setLeads(items.slice(0, 2));
+          setLeads(items);
           setLeadsLoaded(true);
         }
       })
@@ -229,19 +203,16 @@ export default function CustomerDetailsScreen() {
     };
   }, [activeTab, customerPhone, leadsLoaded]);
 
-  const contentBottomSpacing = insets.bottom + 320;
+  const tabContentBottomSpacing = insets.bottom + 320;
 
   return (
-    <SafeAreaView style={globalStyles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={globalStyles.safeArea} edges={['left', 'right']}>
       <StatusBar style="dark" />
 
+      <AppHeader />
+
       <View style={styles.screen}>
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: contentBottomSpacing },
-          ]}>
+        <View style={styles.fixedTopContent}>
           <Text style={styles.pageTitle}>Customer Details</Text>
 
           <View style={styles.banner}>
@@ -272,7 +243,8 @@ export default function CustomerDetailsScreen() {
           </View>
 
           <View style={styles.segmentedControl}>
-            {(['Accounts', 'Leads', 'Insights'] as const).map((tab) => {
+            {/* Insights tab temporarily disabled for now. */}
+            {(['Accounts', 'Leads'] as const).map((tab) => {
               const active = tab === activeTab;
 
               return (
@@ -294,7 +266,15 @@ export default function CustomerDetailsScreen() {
               );
             })}
           </View>
+        </View>
 
+        <ScrollView
+          style={styles.tabScroll}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.tabScrollContent,
+            { paddingBottom: tabContentBottomSpacing },
+          ]}>
           {activeTab === 'Accounts' ? (
             <View style={styles.cardStack}>
               {accountsLoading ? (
@@ -397,48 +377,7 @@ export default function CustomerDetailsScreen() {
                 </View>
               )) : null}
             </View>
-          ) : (
-            <View style={styles.cardStack}>
-              {insightCards.map((item) => (
-                <View key={item.title} style={styles.dataCard}>
-                  <View
-                    style={[
-                      styles.iconWrap,
-                      { backgroundColor: item.iconBackground },
-                    ]}>
-                    <Ionicons name={item.icon} size={24} color={item.iconColor} />
-                  </View>
-
-                  <View style={styles.cardBody}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
-                    {item.subtitle ? (
-                      <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
-                    ) : null}
-                  </View>
-
-                  {item.badge ? (
-                    <View
-                      style={[
-                        styles.badge,
-                        item.badgeVariant === 'amber'
-                          ? styles.badgeAmber
-                          : styles.badgeGreen,
-                      ]}>
-                      <Text
-                        style={[
-                          styles.badgeText,
-                          item.badgeVariant === 'amber'
-                            ? styles.badgeTextAmber
-                            : styles.badgeTextGreen,
-                        ]}>
-                        {item.badge}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          )}
+          ) : null}
         </ScrollView>
 
         <View
@@ -527,8 +466,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F7FB',
   },
 
-  content: {
-    padding: 16,
+  fixedTopContent: {
+    paddingHorizontal: 14,
+    paddingTop: 0,
+    paddingBottom: 8,
+    gap: 8,
+  },
+
+  tabScroll: {
+    flex: 1,
+  },
+
+  tabScrollContent: {
+    paddingHorizontal: 14,
+    paddingTop: 0,
     gap: 16,
   },
 
@@ -537,7 +488,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#F8FAFC',
     opacity: 0.16,
-    marginBottom: 4,
+    marginBottom: 0,
   },
 
   banner: {
@@ -624,14 +575,14 @@ const styles = StyleSheet.create({
   segmentedControl: {
     backgroundColor: '#E7EEF7',
     borderRadius: 24,
-    padding: 4,
+    padding: 3,
     flexDirection: 'row',
-    gap: 4,
+    gap: 3,
   },
 
   segmentButton: {
     flex: 1,
-    height: 52,
+    height: 50,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -761,9 +712,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    backgroundColor: 'transparent',
     paddingTop: 14,
     paddingHorizontal: 12,
     gap: 10,
