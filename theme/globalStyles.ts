@@ -80,7 +80,7 @@ export const globalStyles = StyleSheet.create({
     color: esafColors.page.textMute,
   },
 
-  // Navigation header (used in app/_layout.tsx)
+  // Navigation header shared by AppHeader
   navHeader: {
     height: 120,
     paddingTop: 52,
@@ -126,4 +126,3 @@ export const globalStyles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-

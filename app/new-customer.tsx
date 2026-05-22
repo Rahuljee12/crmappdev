@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppHeader } from '@/components/app-header';
 import { globalStyles } from '@/theme/globalStyles';
 import { Fonts } from '@/theme/theme';
 
@@ -37,8 +38,10 @@ export default function NewCustomerScreen() {
   const canCreateLead = useMemo(() => Boolean(selectedProduct), [selectedProduct]);
 
   return (
-    <SafeAreaView style={globalStyles.safeArea} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={globalStyles.safeArea} edges={['left', 'right']}>
       <StatusBar style="dark" />
+
+      <AppHeader />
 
       <View style={styles.screen}>
         <ScrollView
@@ -343,9 +346,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    backgroundColor: 'transparent',
+    // borderTopWidth: 1,
+    // borderTopColor: '#E5E7EB',
     paddingTop: 14,
     paddingHorizontal: 12,
   },

@@ -708,9 +708,9 @@ const styles = StyleSheet.create({
     elevation: 20,
     paddingTop: 14,
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    backgroundColor: 'transparent',
+    // borderTopWidth: 1,
+    // borderTopColor: '#E5E7EB',
     gap: 10,
   },
 
